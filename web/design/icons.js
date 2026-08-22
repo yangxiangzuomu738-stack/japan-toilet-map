@@ -31,6 +31,7 @@
     close: frame('<path d="m6 6 12 12M18 6 6 18"/>'),
     directions: frame('<path d="M4 5h10l6 6-6 6H4l4-6z"/><path d="M8 11h6M14 8v6"/>'),
     filter: frame('<path d="M4 6h16M7 12h10M10 18h4"/>'),
+    list: frame('<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="18" r=".8" fill="currentColor" stroke="none"/>'),
     info: frame('<circle cx="12" cy="12" r="8"/><path d="M12 10v6"/><circle cx="12" cy="7" r=".8" fill="currentColor" stroke="none"/>'),
     empty: frame('<path d="M7 3h10v5H7z"/><path d="M5 8h14v4a7 7 0 0 1-14 0z"/><path d="M8 19v2M16 19v2M5 5l14 14"/>'),
     unknown: frame('<path d="M9.5 9a2.8 2.8 0 1 1 4.6 2.2c-1.2 1-2.1 1.6-2.1 3.3"/><circle cx="12" cy="17.5" r=".8" fill="currentColor" stroke="none"/>'),

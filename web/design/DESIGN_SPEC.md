@@ -102,3 +102,15 @@
 絞り込みパネルでは、`.filter-list`の直前に`#filter-caveat.filter-caveat`を置きます。控えめな注意色と左罫線で、絞り込み結果が「記録がある場所」に限られることを伝えます。詳細パネルでは`#detail-unknown-note.detail-note`を属性一覧の直後に置き、不明値がある場合のみアプリが表示します。どちらも文字のみでも意味が伝わる設計です。
 
 追加クラス: `side-panel--info`, `filter-caveat`, `detail-note`, `info-panel__content`, `info-summary`, `info-summary__item`, `info-summary__label`, `info-summary__value`, `info-section`, `info-section__title`, `coverage-list`, `coverage-row`, `coverage-row__label`, `coverage-row__bar`, `coverage-row__fill`, `coverage-row__value`, `info-note`, `info-sources`。
+
+## 8. この範囲のトイレ一覧
+
+地図上のマーカーを操作しにくい人もトイレを選べるよう、`#map-controls`に`#open-list`を置きます。`TMIcons.list`は、既存の地図コントロールと同じ`frame(...)`による`currentColor`のSVGです。
+
+`#list-panel.side-panel--list`は、ほかのサイドパネルと同じく、768px未満ではボトムシート、768px以上では左側のパネルです。`#list-count.list-count`は表示件数を、`#list-note.list-note`は上限までの表示であることを伝えます。`#list-sort.list-sort__select`では「地図の中心から近い順」と「名前がある順」を選択できます。表示項目は`#list-items.list-items`へ追加し、対象がないときは`#list-empty.list-empty`を表示します。
+
+`#list-item-template`の各行は、横幅全体を押せる`button.list-item`です。最小高64pxを確保し、40pxの`.list-item__marker`、名称`.list-item__name`、距離・場所`.list-item__meta`、特徴の`.list-item__tags`を並べます。特徴は文字を含む`.tag`で示し、`tag--multi`、`tag--style`、`tag--hours`、`tag--unknown`で補助的に区別します。`.list-item:focus-visible`には明確な3pxのフォーカス輪郭を出し、`aria-current="true"`の行には「選択中」の文字と左罫線を表示します。
+
+PCで一覧と詳細を同時に開く場合は、両パネルを左から順に16pxの間隔で配置します。幅900px以上では各パネルを最大390px、768〜899pxでは利用可能幅の半分まで縮めるため、重なったり画面外に出たりしません。スマホでは一覧と詳細はアプリ側で切り替えて表示します。
+
+追加クラス: `side-panel--list`, `list-panel__content`, `list-summary`, `list-count`, `list-note`, `list-sort`, `list-sort__label`, `list-sort__select`, `list-items`, `list-items__item`, `list-item`, `list-item__marker`, `list-item__content`, `list-item__name`, `list-item__meta`, `list-item__tags`, `tag`, `tag--multi`, `tag--style`, `tag--hours`, `tag--unknown`, `list-empty`。

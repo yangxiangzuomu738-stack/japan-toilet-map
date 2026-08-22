@@ -1,0 +1,49 @@
+<!-- #map-controls の中に追加: 「この範囲のトイレ一覧」を開くボタン -->
+<div class="map-control">
+  <button class="map-control__button icon-slot" id="open-list" type="button" aria-label="この範囲のトイレ一覧" aria-controls="list-panel" aria-expanded="false"></button>
+</div>
+
+<!-- .map-region 内に追加する「この範囲のトイレ」パネル -->
+<aside class="side-panel side-panel--list" id="list-panel" aria-labelledby="list-title" aria-describedby="list-note" aria-hidden="true" hidden>
+  <span class="sheet-handle" aria-hidden="true"></span>
+  <div class="panel-header">
+    <h2 class="panel-title" id="list-title">この範囲のトイレ</h2>
+    <button class="panel-close icon-slot" id="close-list" type="button" aria-label="この範囲のトイレ一覧を閉じる"></button>
+  </div>
+
+  <div class="list-panel__content">
+    <div class="list-summary">
+      <p class="list-count" id="list-count" aria-live="polite">表示中 42 件</p>
+      <p class="list-note" id="list-note" hidden>近い順に 50 件まで表示しています</p>
+    </div>
+
+    <label class="list-sort" for="list-sort">
+      <span class="list-sort__label">並び順</span>
+      <select class="list-sort__select" id="list-sort">
+        <option value="distance">地図の中心から近い順</option>
+        <option value="name">名前がある順</option>
+      </select>
+    </label>
+
+    <ul class="list-items" id="list-items" aria-label="この範囲のトイレ一覧"></ul>
+    <p class="list-empty" id="list-empty" role="status" aria-live="polite" hidden>この範囲にトイレがありません</p>
+
+    <!-- JavaScript が複製して名称、距離、場所、マーカー、特徴を設定します。 -->
+    <template id="list-item-template">
+      <li class="list-items__item">
+        <button class="list-item" type="button">
+          <span class="list-item__marker icon-slot" aria-hidden="true"></span>
+          <span class="list-item__content">
+            <span class="list-item__name">名前の情報はありません</span>
+            <span class="list-item__meta">地図の中心から 約240 m ・ 東京都</span>
+            <span class="list-item__tags">
+              <span class="tag tag--multi">車いす対応</span>
+              <span class="tag tag--style">洋式</span>
+              <span class="tag tag--hours">24時間</span>
+            </span>
+          </span>
+        </button>
+      </li>
+    </template>
+  </div>
+</aside>

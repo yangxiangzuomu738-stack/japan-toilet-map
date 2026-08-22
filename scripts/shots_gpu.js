@@ -51,6 +51,17 @@ async function settle(page, center, zoom) {
     });
     await p.screenshot({ path: path.join(SHOTS, 'gpu-02-detail.png') });
 
+    // --- 一覧（PCでは詳細と同時に開く） ---
+    await p.evaluate(async () => {
+      document.getElementById('open-list').click();
+      await new Promise(r => setTimeout(r, 2500));
+    });
+    await p.screenshot({ path: path.join(SHOTS, 'gpu-10-list.png') });
+    await p.evaluate(() => {
+      document.getElementById('close-list').click();
+      document.getElementById('close-detail').click();
+    });
+
     // --- 絞り込み ---
     await p.evaluate(async () => {
       document.getElementById('close-detail').click();
@@ -92,6 +103,12 @@ async function settle(page, center, zoom) {
       await new Promise(r => setTimeout(r, 800));
     });
     await p.screenshot({ path: path.join(SHOTS, 'gpu-08-mobile-info.png') });
+    await p.evaluate(async () => {
+      document.getElementById('close-info').click();
+      document.getElementById('open-list').click();
+      await new Promise(r => setTimeout(r, 2500));
+    });
+    await p.screenshot({ path: path.join(SHOTS, 'gpu-11-mobile-list.png') });
     await p.close();
 
     // --- 文字サイズ「大」 ---

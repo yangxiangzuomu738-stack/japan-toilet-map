@@ -13,7 +13,11 @@
   var DATA_DETAILS = 'data/details.json';
   var DATA_META = 'data/meta.json';
 
-  var JAPAN_BOUNDS = [[122.0, 20.2], [154.0, 45.8]];
+  // 地図を動かせる範囲（小笠原・南西諸島まで含む）
+  // 縦長のスマホでも沖縄から北海道まで一度に収まるよう、実際の国土より少し広く取る
+  var JAPAN_BOUNDS = [[112.0, 14.0], [164.0, 51.0]];
+  // 起動時に画面へ収める範囲（沖縄本島から北海道まで）
+  var HOME_BOUNDS = [[126.5, 25.8], [146.5, 45.6]];
   var INITIAL = { center: [138.5, 37.0], zoom: 4.6 };
 
   var map = null;
@@ -36,6 +40,8 @@
     'close-detail': 'close',
     'open-info': 'info',
     'close-info': 'close',
+    'open-list': 'list',
+    'close-list': 'close',
     'directions-icon': 'directions',
     'empty-state-icon': 'empty',
     'attribute-multi-icon': 'accessible',
@@ -133,7 +139,7 @@
       style: buildStyle(),
       center: INITIAL.center,
       zoom: INITIAL.zoom,
-      minZoom: 4,
+      minZoom: 3.5,
       maxZoom: 19,
       maxBounds: JAPAN_BOUNDS,
       attributionControl: false,
@@ -248,6 +254,7 @@
     var src = map.getSource('toilets');
     if (src) src.setData(currentGeoJSON);
     updateEmptyState();
+    renderList();
   }
 
   function updateEmptyState() {
@@ -353,6 +360,10 @@
     el.setAttribute('aria-hidden', 'false');
     if (id === 'filter-panel') $('open-filter').setAttribute('aria-expanded', 'true');
     if (id === 'info-panel') $('open-info').setAttribute('aria-expanded', 'true');
+    if (id === 'list-panel') {
+      $('open-list').setAttribute('aria-expanded', 'true');
+      renderList();
+    }
   }
 
   function closePanel(id) {
@@ -361,7 +372,122 @@
     el.setAttribute('aria-hidden', 'true');
     if (id === 'filter-panel') $('open-filter').setAttribute('aria-expanded', 'false');
     if (id === 'info-panel') $('open-info').setAttribute('aria-expanded', 'false');
+    if (id === 'list-panel') $('open-list').setAttribute('aria-expanded', 'false');
     if (id === 'detail-panel') clearSelection();
+  }
+
+  // ------------------------------------------------ 「この範囲のトイレ」一覧
+  var LIST_LIMIT = 50;
+  var listSort = 'distance';
+
+  function tagsFor(code) {
+    var out = [];
+    if (code.multi === 1) out.push(['multi', '車いす対応']);
+    if (code.style === 1) out.push(['style', '洋式']);
+    else if (code.style === 2) out.push(['style', '和式']);
+    else if (code.style === 3) out.push(['style', '洋式・和式']);
+    if (code.h24 === 1) out.push(['hours', '24時間']);
+    if (out.length === 0) out.push(['unknown', '情報が少ない場所']);
+    return out.slice(0, 3);
+  }
+
+  function renderList() {
+    var panel = $('list-panel');
+    if (!panel || panel.hidden) return;
+
+    var center = map.getCenter();
+    var c = [center.lng, center.lat];
+    var idx = window.TMData.inBounds(filter, map.getBounds(), 0);
+
+    var items = idx.map(function (i) {
+      return { i: i, d: haversine(c, [window.TMData.store.lon[i], window.TMData.store.lat[i]]) };
+    });
+
+    var total = items.length;
+    var shown;
+    if (listSort === 'name') {
+      var det = window.TMData.store.details;
+      items.sort(function (a, b) {
+        var na = det && det[a.i] && det[a.i][0] ? 0 : 1;
+        var nb = det && det[b.i] && det[b.i][0] ? 0 : 1;
+        return na !== nb ? na - nb : a.d - b.d;
+      });
+      shown = items.slice(0, LIST_LIMIT);
+    } else if (total > 3000) {
+      // 件数が多いときは全体を並べ替えず、近い順に必要な数だけ選び出す
+      shown = [];
+      for (var k = 0; k < total; k++) {
+        var it2 = items[k];
+        if (shown.length < LIST_LIMIT) {
+          shown.push(it2);
+          if (shown.length === LIST_LIMIT) shown.sort(function (a, b) { return a.d - b.d; });
+        } else if (it2.d < shown[LIST_LIMIT - 1].d) {
+          shown[LIST_LIMIT - 1] = it2;
+          for (var j = LIST_LIMIT - 1; j > 0 && shown[j].d < shown[j - 1].d; j--) {
+            var t = shown[j]; shown[j] = shown[j - 1]; shown[j - 1] = t;
+          }
+        }
+      }
+      shown.sort(function (a, b) { return a.d - b.d; });
+    } else {
+      items.sort(function (a, b) { return a.d - b.d; });
+      shown = items.slice(0, LIST_LIMIT);
+    }
+
+    $('list-count').textContent = '表示中 ' + total.toLocaleString('ja-JP') + ' 件';
+    $('list-note').hidden = total <= LIST_LIMIT;
+    $('list-empty').hidden = total > 0;
+
+    var ul = $('list-items');
+    var tpl = $('list-item-template');
+    ul.innerHTML = '';
+    if (!tpl) return;
+
+    shown.forEach(function (it) {
+      var r = window.TMData.record(it.i);
+      var node = tpl.content.cloneNode(true);
+      var li = node.querySelector('.list-items__item');
+      var btn = node.querySelector('.list-item');
+
+      var kind = window.TMData.markerKind(window.TMData.store.flags[it.i]);
+      var markerEl = node.querySelector('.list-item__marker');
+      markerEl.classList.add('list-item__marker--' + kind);
+      markerEl.innerHTML = window.TMIcons.marker(kind, false);
+      node.querySelector('.list-item__name').textContent = r.name || '名前の情報はありません';
+      node.querySelector('.list-item__meta').textContent =
+        '地図の中心から ' + fmtDistance(it.d) + (r.pref ? ' ・ ' + r.pref : '');
+
+      var tagBox = node.querySelector('.list-item__tags');
+      tagBox.innerHTML = '';
+      tagsFor(r.code).forEach(function (t) {
+        var span = document.createElement('span');
+        span.className = 'tag tag--' + t[0];
+        span.textContent = t[1];
+        tagBox.appendChild(span);
+      });
+
+      if (selectedIndex === it.i) btn.setAttribute('aria-current', 'true');
+      btn.addEventListener('click', function () {
+        map.flyTo({ center: [r.lon, r.lat], zoom: Math.max(map.getZoom(), 17), duration: 800 });
+        showDetail(it.i);
+        renderList();
+      });
+
+      ul.appendChild(li);
+    });
+  }
+
+  /** 一覧の中を上下矢印で移動できるようにする */
+  function bindListKeys() {
+    $('list-items').addEventListener('keydown', function (e) {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      var buttons = Array.prototype.slice.call(this.querySelectorAll('.list-item'));
+      var at = buttons.indexOf(document.activeElement);
+      if (at === -1) return;
+      e.preventDefault();
+      var next = e.key === 'ArrowDown' ? at + 1 : at - 1;
+      if (next >= 0 && next < buttons.length) buttons[next].focus();
+    });
   }
 
   // -------------------------------------------------- 「データについて」パネル
@@ -557,6 +683,23 @@
       if (panel.hidden) openPanel('filter-panel'); else closePanel('filter-panel');
     });
     $('close-filter').addEventListener('click', function () { closePanel('filter-panel'); });
+    $('open-list').addEventListener('click', function () {
+      var panel = $('list-panel');
+      if (panel.hidden) {
+        // 名前を出すために詳細データが要る
+        window.TMData.loadDetails(DATA_DETAILS).then(renderList).catch(function () {});
+        openPanel('list-panel');
+      } else {
+        closePanel('list-panel');
+      }
+    });
+    $('close-list').addEventListener('click', function () { closePanel('list-panel'); });
+    $('list-sort').addEventListener('change', function () {
+      listSort = this.value;
+      renderList();
+    });
+    bindListKeys();
+
     $('open-info').addEventListener('click', function () {
       var panel = $('info-panel');
       if (panel.hidden) openPanel('info-panel'); else closePanel('info-panel');
@@ -605,8 +748,18 @@
 
     $('app-home').addEventListener('click', function (e) {
       e.preventDefault();
-      map.flyTo({ center: INITIAL.center, zoom: INITIAL.zoom, duration: 900 });
+      goHome(true);
     });
+  }
+
+  /** 日本全体が画面に収まる位置へ移動する（画面の縦横比に合わせて自動で調整） */
+  function goHome(animate) {
+    var opts = { padding: { top: 24, bottom: 24, left: 24, right: 24 }, duration: animate ? 900 : 0 };
+    try {
+      map.fitBounds(HOME_BOUNDS, opts);
+    } catch (e) {
+      map.jumpTo({ center: INITIAL.center, zoom: INITIAL.zoom });
+    }
   }
 
   function setTextSize(mode) {
@@ -636,7 +789,12 @@
       map.on('mouseleave', id, function () { map.getCanvas().style.cursor = ''; });
     });
 
-    map.on('moveend', updateEmptyState);
+    var moveTimer = null;
+    map.on('moveend', function () {
+      updateEmptyState();
+      clearTimeout(moveTimer);
+      moveTimer = setTimeout(renderList, 150);
+    });
   }
 
   // ---------------------------------------------------------------- 起動
@@ -678,6 +836,7 @@
         addLayers();
         bindMap();
         refresh();
+        goHome(false);
         $('loading-state').hidden = true;
         loadMeta();
         // 名前検索のために詳細も裏で読み込む

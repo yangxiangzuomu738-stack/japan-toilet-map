@@ -154,6 +154,59 @@ async function waitForApp(page, ms = 60000) {
           filtered.before + ' → ' + filtered.after);
     await page.screenshot({ path: path.join(SHOTS, '04-desktop-filter.png') });
 
+    // ---- 一覧パネル ----
+    const listInfo = await page.evaluate(async () => {
+      document.getElementById('close-filter').click();
+      document.getElementById('open-list').click();
+      await new Promise(r => setTimeout(r, 2500));
+      const items = document.querySelectorAll('#list-items .list-item');
+      const first = items[0];
+      return {
+        display: getComputedStyle(document.getElementById('list-panel')).display,
+        n: items.length,
+        count: document.getElementById('list-count').textContent,
+        name: first ? first.querySelector('.list-item__name').textContent : '',
+        meta: first ? first.querySelector('.list-item__meta').textContent : '',
+        tags: first ? first.querySelectorAll('.tag').length : 0,
+        isButton: first ? first.tagName : '',
+        height: first ? Math.round(first.getBoundingClientRect().height) : 0
+      };
+    });
+    check('一覧パネルが開く', listInfo.display !== 'none', listInfo.display);
+    check('一覧に項目が並ぶ', listInfo.n > 0, listInfo.n + ' 件 / ' + listInfo.count);
+    check('一覧に距離と場所が出る', /から/.test(listInfo.meta), listInfo.meta);
+    check('一覧に特徴の札が出る', listInfo.tags > 0, listInfo.tags + ' 個');
+    check('一覧の項目はボタン（キーボード操作可）', listInfo.isButton === 'BUTTON', listInfo.isButton);
+    check('一覧の項目が64px以上', listInfo.height >= 64, listInfo.height + 'px');
+
+    const listNav = await page.evaluate(async () => {
+      const items = document.querySelectorAll('#list-items .list-item');
+      items[0].focus();
+      const before = document.activeElement === items[0];
+      items[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      await new Promise(r => setTimeout(r, 200));
+      const moved = document.activeElement === items[1];
+      return { before, moved };
+    });
+    check('一覧をキーボードで移動できる', listNav.before && listNav.moved,
+          'focus=' + listNav.before + ' 下矢印=' + listNav.moved);
+
+    const listPick = await page.evaluate(async () => {
+      document.querySelectorAll('#list-items .list-item')[0].click();
+      await new Promise(r => setTimeout(r, 2000));
+      return {
+        detail: getComputedStyle(document.getElementById('detail-panel')).display,
+        name: document.getElementById('place-name').textContent
+      };
+    });
+    check('一覧から選ぶと詳細が開く', listPick.detail !== 'none', listPick.name);
+    await page.screenshot({ path: path.join(SHOTS, '13-desktop-list.png') });
+    await page.evaluate(() => {
+      document.getElementById('close-detail').click();
+      document.getElementById('close-list').click();
+      document.getElementById('open-filter').click();
+    });
+
     // ---- データについてパネル ----
     const info = await page.evaluate(async () => {
       document.getElementById('close-filter').click();

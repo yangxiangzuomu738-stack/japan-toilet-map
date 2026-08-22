@@ -1,0 +1,60 @@
+name: トイレデータを更新
+
+# 毎月1日 03:00 JST（= 前日 18:00 UTC）に OpenStreetMap から取り直す。
+# 手動実行もできる。
+on:
+  schedule:
+    - cron: '0 18 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 都道府県ごとに取得（都道府県コードの割り当て用）
+        run: python scripts/fetch_osm.py
+
+      - name: 全国を一括取得（掲載データの正）
+        run: |
+          set -e
+          for i in 1 2 3 4 5; do
+            if curl -sS -m 1200 -X POST \
+                 --data-urlencode "data@scripts/verify_all.ql" \
+                 -A "japan-toilet-map/1.0 (GitHub Actions; OSM data refresh)" \
+                 "https://overpass-api.de/api/interpreter" -o data/national.json; then
+              if python -c "import json,sys; d=json.load(open('data/national.json',encoding='utf-8')); sys.exit(0 if len(d.get('elements',[]))>10000 else 1)"; then
+                echo "取得成功"
+                exit 0
+              fi
+            fi
+            echo "再試行 $i"
+            sleep 120
+          done
+          echo "全国データの取得に失敗しました" >&2
+          exit 1
+
+      - name: アプリ用データを生成
+        run: python scripts/build_data.py
+
+      - name: 変更があればコミット
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- web/data data/stats.json; then
+            echo "変更なし"
+            exit 0
+          fi
+          COUNT=$(python -c "import json;print(json.load(open('web/data/meta.json',encoding='utf-8'))['count'])")
+          git add web/data data/stats.json
+          git commit -m "トイレデータを更新（${COUNT} 件）"
+          git push
