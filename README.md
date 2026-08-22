@@ -106,6 +106,7 @@ npm install
 node scripts/verify.js               # ヘッドレスブラウザで機能を自動検証
 node scripts/probe_basemap.js        # 背景地図の描画を層ごとに数える
 node scripts/shot.js gpu 139.7671 35.6812 16 light 1200 800 map
+python scripts/audit_data.py 40      # 表示内容を OSM の原本と突き合わせる
 ```
 
 `data/shots/` にスクリーンショットが出力されます。
@@ -115,6 +116,12 @@ node scripts/shot.js gpu 139.7671 35.6812 16 light 1200 800 map
 > `fill` と `line` のシェーダがコンパイルできず、
 > 道路・建物・水域が描画されないことがあります（文字とアイコンだけが出ます）。
 > `scripts/shot.js` は実GPUのChromeを使うため、本物の見た目が確認できます。
+
+`scripts/audit_data.py` は、アプリのデータからランダムに選んだ件について
+OpenStreetMap API で元のタグを取り直し、
+アプリが表示する値（多目的トイレ・便器の種類・男女別・共用・料金・利用条件など）が
+原本と一致するか検査します。
+2026年8月23日の実行では **40件中40件が一致**しました。
 
 ---
 
