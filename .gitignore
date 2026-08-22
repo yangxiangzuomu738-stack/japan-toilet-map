@@ -1,0 +1,14 @@
+node_modules/
+package-lock.json
+data/raw/
+data/national.json
+data/probe.json
+data/geocode_probe.json
+data/gsi_std_style.json
+data/fetch.log
+data/codex_*.log
+data/shots/
+data/verify-result.json
+.DS_Store
+__pycache__/
+*.pyc

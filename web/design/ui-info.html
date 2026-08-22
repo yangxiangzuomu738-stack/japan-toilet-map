@@ -1,0 +1,58 @@
+<!-- #map-controls の中に追加: 「データについて」を開くボタン -->
+<div class="map-control">
+  <button class="map-control__button icon-slot" id="open-info" type="button" aria-label="データについて" aria-controls="info-panel" aria-expanded="false"></button>
+</div>
+
+<!-- #filter-panel 内で .filter-list の直前に追加 -->
+<div class="filter-caveat" id="filter-caveat" role="note">
+  <p>絞り込みは「記録がある場所」だけが対象です。<br>記録が無い場所（不明）は絞り込みの結果に出ません。</p>
+</div>
+
+<!-- .attribute-list の直後に追加。JavaScriptが不明項目の有無に応じてhiddenを切り替える -->
+<p class="detail-note" id="detail-unknown-note" hidden>「不明」は、まだ記録が無いという意味です。設備が無いとは限りません。</p>
+
+<!-- .map-region 内に追加する「データについて」パネル -->
+<aside class="side-panel side-panel--info" id="info-panel" aria-labelledby="info-title" aria-describedby="info-note" aria-hidden="true" hidden>
+  <span class="sheet-handle" aria-hidden="true"></span>
+  <div class="panel-header">
+    <h2 class="panel-title" id="info-title">データについて</h2>
+    <button class="panel-close icon-slot" id="close-info" type="button" aria-label="データについてを閉じる"></button>
+  </div>
+
+  <div class="info-panel__content">
+    <dl class="info-summary">
+      <div class="info-summary__item">
+        <dt class="info-summary__label">掲載件数</dt>
+        <dd class="info-summary__value" id="info-total">31,704 件</dd>
+      </div>
+      <div class="info-summary__item">
+        <dt class="info-summary__label">データ取得日</dt>
+        <dd class="info-summary__value" id="info-updated">2026年8月23日</dd>
+      </div>
+    </dl>
+
+    <section class="info-section" aria-labelledby="info-coverage-title">
+      <h3 class="info-section__title" id="info-coverage-title">項目ごとの記録状況</h3>
+      <div class="coverage-list" id="info-coverage" aria-live="polite"></div>
+      <template id="coverage-row-template">
+        <div class="coverage-row">
+          <span class="coverage-row__label">便器の種類（洋式・和式）</span>
+          <span class="coverage-row__value">2.7%（866件）</span>
+          <span class="coverage-row__bar" aria-hidden="true"><span class="coverage-row__fill" style="width: 2.7%"></span></span>
+        </div>
+      </template>
+    </section>
+
+    <section class="info-section" aria-labelledby="info-note-title">
+      <h3 class="info-section__title" id="info-note-title">「不明」について</h3>
+      <div class="info-note" id="info-note">
+        <p>この地図の情報は、世界中の有志が作る自由な地図「OpenStreetMap」を出典としています。<br>記録が無い項目は、推測で埋めずに「不明」と表示しています。</p>
+        <p>「不明」が多いのは、その設備が無いという意味ではなく、<br>まだ誰も記録していないという意味です。<br>絞り込みで出てくる件数も、「記録がある場所」の件数です。</p>
+      </div>
+      <ul class="info-sources" aria-label="出典">
+        <li><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></li>
+        <li><a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a></li>
+      </ul>
+    </section>
+  </div>
+</aside>

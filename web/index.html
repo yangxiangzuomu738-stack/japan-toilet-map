@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>トイレマップ — 日本全国の誰でも使えるトイレ</title>
+<meta name="description" content="日本全国の公衆トイレ・公共施設のトイレを地図で探せます。多目的トイレ（車いす対応）、洋式・和式、男女別・共用の有無がひと目で分かります。">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23005560'/%3E%3Cg fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 5h8v4H8z'/%3E%3Cpath d='M6.5 9h11v3a5.5 5.5 0 0 1-11 0z'/%3E%3Cpath d='M9 17v2M15 17v2'/%3E%3C/g%3E%3C/svg%3E">
+</head>
+<body>
+<main class="tm-app" id="tm-app">
+  <header class="app-header" id="app-header">
+    <a class="app-brand" id="app-home" href="#map" aria-label="トイレマップの地図へ">
+      <span class="app-brand__mark icon-slot" id="brand-icon" aria-hidden="true"></span>
+      <span class="app-brand__name">トイレマップ</span>
+    </a>
+
+    <div class="search-area" id="search-area">
+      <div class="search-box" role="search">
+        <span class="search-box__icon icon-slot" id="search-icon" aria-hidden="true"></span>
+        <label class="visually-hidden" for="place-search">地名や住所を検索</label>
+        <input class="search-box__input" id="place-search" type="search" inputmode="search" autocomplete="off" placeholder="地名や住所を入力" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false">
+        <button class="search-box__clear icon-slot" id="clear-search" type="button" aria-label="検索を消去" hidden></button>
+      </div>
+      <ul class="search-results" id="search-results" role="listbox" aria-label="検索候補" hidden></ul>
+    </div>
+
+    <div class="text-size-control" id="text-size-control" role="group" aria-label="文字の大きさ">
+      <span class="text-size-control__label">文字</span>
+      <button class="text-size-control__button" id="text-size-standard" type="button" aria-pressed="true">標準</button>
+      <button class="text-size-control__button" id="text-size-large" type="button" aria-pressed="false">大</button>
+    </div>
+  </header>
+
+  <section class="map-region" id="map" aria-label="トイレの地図">
+    <div id="map-container" role="application" aria-label="日本全国のトイレの地図。ドラッグで移動、ピンチまたはプラスマイナスのボタンで拡大縮小できます。"></div>
+
+    <div class="map-controls" id="map-controls" role="group" aria-label="地図の操作">
+      <div class="map-control--grouped" id="zoom-controls" role="group" aria-label="拡大と縮小">
+        <button class="map-control__button icon-slot" id="zoom-in" type="button" aria-label="地図を拡大"></button>
+        <div class="map-control__divider" aria-hidden="true"></div>
+        <button class="map-control__button icon-slot" id="zoom-out" type="button" aria-label="地図を縮小"></button>
+      </div>
+      <div class="map-control">
+        <button class="map-control__button icon-slot" id="locate-me" type="button" aria-label="現在地を表示"></button>
+      </div>
+      <div class="map-control">
+        <button class="map-control__button icon-slot" id="reset-bearing" type="button" aria-label="北を上に戻す"></button>
+      </div>
+      <div class="map-control">
+        <button class="map-control__button icon-slot" id="open-filter" type="button" aria-label="絞り込みを開く" aria-controls="filter-panel" aria-expanded="false"></button>
+      </div>
+      <div class="map-control">
+        <button class="map-control__button icon-slot" id="open-info" type="button" aria-label="データについて" aria-controls="info-panel" aria-expanded="false"></button>
+      </div>
+    </div>
+
+    <aside class="map-legend" id="map-legend" aria-labelledby="legend-title">
+      <h2 class="legend-title" id="legend-title">地図の印</h2>
+      <ul class="legend-list">
+        <li class="legend-item"><span class="legend-marker legend-marker--yes icon-slot" id="legend-marker-yes" aria-hidden="true"></span><span>車いす対応あり</span></li>
+        <li class="legend-item"><span class="legend-marker legend-marker--no icon-slot" id="legend-marker-no" aria-hidden="true"></span><span>車いす対応なし・一部対応</span></li>
+        <li class="legend-item"><span class="legend-marker legend-marker--unknown icon-slot" id="legend-marker-unknown" aria-hidden="true"></span><span>車いす対応は不明</span></li>
+        <li class="legend-item"><span class="cluster-marker" id="legend-cluster" aria-hidden="true">128</span><span>近くに複数あります</span></li>
+      </ul>
+    </aside>
+
+    <aside class="side-panel side-panel--filter" id="filter-panel" aria-labelledby="filter-title" aria-hidden="true" hidden>
+      <span class="sheet-handle" aria-hidden="true"></span>
+      <div class="panel-header">
+        <h2 class="panel-title" id="filter-title">絞り込み</h2>
+        <button class="panel-close icon-slot" id="close-filter" type="button" aria-label="絞り込みを閉じる"></button>
+      </div>
+      <div class="filter-caveat" id="filter-caveat" role="note">
+        <p>絞り込みは「記録がある場所」だけが対象です。<br>記録が無い場所（不明）は絞り込みの結果に出ません。</p>
+      </div>
+      <div class="filter-list" id="filter-list" role="group" aria-label="表示するトイレの条件">
+        <label class="filter-option"><input class="filter-option__control" id="filter-multi" type="checkbox"><span><span class="filter-option__label">車いす対応あり</span><span class="filter-option__hint">多目的トイレがある場所</span></span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-seated" type="checkbox"><span class="filter-option__label">洋式あり</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-squat" type="checkbox"><span class="filter-option__label">和式あり</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-gendered" type="checkbox"><span class="filter-option__label">男女別あり</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-unisex" type="checkbox"><span class="filter-option__label">共用あり</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-baby" type="checkbox"><span class="filter-option__label">おむつ交換台あり</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-ostomate" type="checkbox"><span class="filter-option__label">オストメイト対応</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-24hours" type="checkbox"><span class="filter-option__label">24時間利用可</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-free" type="checkbox"><span class="filter-option__label">無料</span></label>
+        <label class="filter-option"><input class="filter-option__control" id="filter-public" type="checkbox"><span><span class="filter-option__label">誰でも利用可</span><span class="filter-option__hint">客のみの場所を除く</span></span></label>
+      </div>
+      <div class="panel-actions">
+        <button class="button button--text" id="clear-filters" type="button">条件を消去</button>
+        <button class="button button--primary" id="apply-filters" type="button">この条件で表示</button>
+      </div>
+    </aside>
+
+    <aside class="side-panel side-panel--detail" id="detail-panel" aria-labelledby="detail-title" aria-hidden="true" hidden>
+      <span class="sheet-handle" aria-hidden="true"></span>
+      <div class="panel-header">
+        <h2 class="panel-title" id="detail-title">トイレの情報</h2>
+        <button class="panel-close icon-slot" id="close-detail" type="button" aria-label="トイレの情報を閉じる"></button>
+      </div>
+      <article class="place-card" id="place-card">
+        <h3 class="place-card__title" id="place-name">トイレ</h3>
+        <p class="place-card__subtitle" id="place-address"></p>
+        <dl class="attribute-list" id="attribute-list">
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-multi-icon" aria-hidden="true"></dt><dt class="attribute-row__label">車いす対応</dt><dd class="attribute-row__value" id="attribute-multi-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-style-icon" aria-hidden="true"></dt><dt class="attribute-row__label">便器の種類</dt><dd class="attribute-row__value" id="attribute-style-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-gender-icon" aria-hidden="true"></dt><dt class="attribute-row__label">男子・女子トイレ</dt><dd class="attribute-row__value" id="attribute-gender-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-unisex-icon" aria-hidden="true"></dt><dt class="attribute-row__label">共用</dt><dd class="attribute-row__value" id="attribute-unisex-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-baby-icon" aria-hidden="true"></dt><dt class="attribute-row__label">おむつ交換台</dt><dd class="attribute-row__value" id="attribute-baby-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-ostomate-icon" aria-hidden="true"></dt><dt class="attribute-row__label">オストメイト対応</dt><dd class="attribute-row__value" id="attribute-ostomate-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-fee-icon" aria-hidden="true"></dt><dt class="attribute-row__label">料金</dt><dd class="attribute-row__value" id="attribute-fee-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-hours-icon" aria-hidden="true"></dt><dt class="attribute-row__label">利用時間</dt><dd class="attribute-row__value" id="attribute-hours-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-access-icon" aria-hidden="true"></dt><dt class="attribute-row__label">利用条件</dt><dd class="attribute-row__value" id="attribute-access-value">不明</dd></div>
+          <div class="attribute-row"><dt class="attribute-row__icon icon-slot" id="attribute-operator-icon" aria-hidden="true"></dt><dt class="attribute-row__label">管理者</dt><dd class="attribute-row__value" id="attribute-operator-value">不明</dd></div>
+        </dl>
+        <p class="detail-note" id="detail-unknown-note" hidden>「不明」は、まだ記録が無いという意味です。設備が無いとは限りません。</p>
+        <div class="detail-links" id="detail-links">
+          <a class="button button--primary" id="directions-link" href="#" target="_blank" rel="noopener"><span class="icon-slot" id="directions-icon" aria-hidden="true"></span>経路案内</a>
+          <a class="detail-link" id="osm-link" href="#" target="_blank" rel="noopener">OpenStreetMapで元データを見る</a>
+        </div>
+      </article>
+    </aside>
+
+<aside class="side-panel side-panel--info" id="info-panel" aria-labelledby="info-title" aria-describedby="info-note" aria-hidden="true" hidden>
+  <span class="sheet-handle" aria-hidden="true"></span>
+  <div class="panel-header">
+    <h2 class="panel-title" id="info-title">データについて</h2>
+    <button class="panel-close icon-slot" id="close-info" type="button" aria-label="データについてを閉じる"></button>
+  </div>
+
+  <div class="info-panel__content">
+    <dl class="info-summary">
+      <div class="info-summary__item">
+        <dt class="info-summary__label">掲載件数</dt>
+        <dd class="info-summary__value" id="info-total">31,704 件</dd>
+      </div>
+      <div class="info-summary__item">
+        <dt class="info-summary__label">データ取得日</dt>
+        <dd class="info-summary__value" id="info-updated">2026年8月23日</dd>
+      </div>
+    </dl>
+
+    <section class="info-section" aria-labelledby="info-coverage-title">
+      <h3 class="info-section__title" id="info-coverage-title">項目ごとの記録状況</h3>
+      <div class="coverage-list" id="info-coverage" aria-live="polite"></div>
+      <template id="coverage-row-template">
+        <div class="coverage-row">
+          <span class="coverage-row__label">便器の種類（洋式・和式）</span>
+          <span class="coverage-row__value">2.7%（866件）</span>
+          <span class="coverage-row__bar" aria-hidden="true"><span class="coverage-row__fill" style="width: 2.7%"></span></span>
+        </div>
+      </template>
+    </section>
+
+    <section class="info-section" aria-labelledby="info-note-title">
+      <h3 class="info-section__title" id="info-note-title">「不明」について</h3>
+      <div class="info-note" id="info-note">
+        <p>この地図の情報は、世界中の有志が作る自由な地図「OpenStreetMap」を出典としています。<br>記録が無い項目は、推測で埋めずに「不明」と表示しています。</p>
+        <p>「不明」が多いのは、その設備が無いという意味ではなく、<br>まだ誰も記録していないという意味です。<br>絞り込みで出てくる件数も、「記録がある場所」の件数です。</p>
+      </div>
+      <ul class="info-sources" aria-label="出典">
+        <li><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a></li>
+        <li><a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a></li>
+      </ul>
+    </section>
+  </div>
+</aside>
+
+    <div class="loading-state" id="loading-state" role="status" aria-live="polite">
+      <span class="loading-spinner" aria-hidden="true"></span><span id="loading-text">トイレの場所を読み込んでいます</span>
+    </div>
+    <div class="empty-state" id="empty-state" role="status" aria-live="polite" hidden>
+      <span class="empty-state__icon icon-slot" id="empty-state-icon" aria-hidden="true"></span>
+      <h2 class="empty-state__title">この範囲にトイレが見つかりません</h2>
+      <p class="empty-state__text">地図を広げるか、絞り込みの条件を減らしてください。</p>
+    </div>
+    <div class="toast-region" id="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
+    <small class="map-attribution" id="map-attribution">出典: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> / <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a></small>
+  </section>
+</main>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="design/icons.js"></script>
+<script src="js/palette.js"></script>
+<script src="js/basemap.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

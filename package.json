@@ -1,0 +1,20 @@
+{
+  "name": "japan-toilet-map",
+  "version": "1.0.0",
+  "description": "日本全国の誰でも使えるトイレを地図で探せるWebアプリ",
+  "scripts": {
+    "serve": "python -m http.server 8765 --directory web",
+    "fetch:data": "python scripts/fetch_osm.py",
+    "build:data": "python scripts/build_data.py",
+    "verify": "node scripts/verify.js",
+    "probe:basemap": "node scripts/probe_basemap.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer": "^25.8.0"
+  },
+  "private": true
+}
