@@ -64,12 +64,19 @@ nwr(area.a)["amenity"="toilets"]->.t;
 );
 out tags bb;"""
 
+# 施設側に「トイレがある」と読み取れる記録。
+# toilets=yes だけでなく、トイレの設備が記録されているもの
+# （toilets:wheelchair など）も、トイレが存在する記録として扱う。
+# 「あるはず」という推測ではなく、誰かが実際に記録した情報だけを使う。
 FACILITY_QUERY = """[out:json][timeout:900];
 area["ISO3166-1"="JP"]["admin_level"="2"]->.jp;
 (
-  node(area.jp)["toilets"="yes"];
-  way(area.jp)["toilets"="yes"];
-  relation(area.jp)["toilets"="yes"];
+  nwr(area.jp)["toilets"~"^(yes|customers|limited|seasonal)$"];
+  nwr(area.jp)["toilets:wheelchair"]["amenity"!="toilets"]["toilets"!="no"];
+  nwr(area.jp)["toilets:disposal"]["amenity"!="toilets"]["toilets"!="no"];
+  nwr(area.jp)["toilets:position"]["amenity"!="toilets"]["toilets"!="no"];
+  nwr(area.jp)["toilets:access"]["amenity"!="toilets"]["toilets"!="no"];
+  nwr(area.jp)["ostomate"]["amenity"!="toilets"]["toilets"!="no"];
 );
 out center tags;"""
 

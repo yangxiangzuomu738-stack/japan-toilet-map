@@ -1,0 +1,185 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.4 2390de5a",
+  "osm3s": {
+    "timestamp_osm_base": "2026-08-23T22:48:50Z",
+    "timestamp_areas_base": "2026-08-23T21:13:36Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "elements": [
+
+{
+  "type": "node",
+  "id": 2735769138
+},
+{
+  "type": "node",
+  "id": 2735769141
+},
+{
+  "type": "node",
+  "id": 2735769453
+},
+{
+  "type": "node",
+  "id": 2735769573
+},
+{
+  "type": "node",
+  "id": 2735769979
+},
+{
+  "type": "node",
+  "id": 2735770209
+},
+{
+  "type": "node",
+  "id": 2735778853
+},
+{
+  "type": "node",
+  "id": 2735780568
+},
+{
+  "type": "node",
+  "id": 2865617589
+},
+{
+  "type": "node",
+  "id": 5181179021
+},
+{
+  "type": "node",
+  "id": 5182859321
+},
+{
+  "type": "node",
+  "id": 5185758824
+},
+{
+  "type": "node",
+  "id": 5461928538
+},
+{
+  "type": "node",
+  "id": 5461928539
+},
+{
+  "type": "node",
+  "id": 5461928540
+},
+{
+  "type": "node",
+  "id": 7289015892
+},
+{
+  "type": "node",
+  "id": 7400310350
+},
+{
+  "type": "node",
+  "id": 7416233037
+},
+{
+  "type": "node",
+  "id": 8689442296
+},
+{
+  "type": "node",
+  "id": 8689442297
+},
+{
+  "type": "node",
+  "id": 8791311696
+},
+{
+  "type": "node",
+  "id": 8874821462
+},
+{
+  "type": "node",
+  "id": 8874821468
+},
+{
+  "type": "node",
+  "id": 9050237671
+},
+{
+  "type": "node",
+  "id": 9816169235
+},
+{
+  "type": "node",
+  "id": 9834843498
+},
+{
+  "type": "node",
+  "id": 9834843499
+},
+{
+  "type": "node",
+  "id": 9834843500
+},
+{
+  "type": "node",
+  "id": 9834864304
+},
+{
+  "type": "node",
+  "id": 9834926017
+},
+{
+  "type": "node",
+  "id": 9834926018
+},
+{
+  "type": "node",
+  "id": 9834926019
+},
+{
+  "type": "node",
+  "id": 9930955213
+},
+{
+  "type": "node",
+  "id": 9930955214
+},
+{
+  "type": "node",
+  "id": 10043776274
+},
+{
+  "type": "node",
+  "id": 10043776276
+},
+{
+  "type": "node",
+  "id": 10043776278
+},
+{
+  "type": "node",
+  "id": 10043776279
+},
+{
+  "type": "node",
+  "id": 11993231052
+},
+{
+  "type": "node",
+  "id": 12990983531
+},
+{
+  "type": "node",
+  "id": 14048792576
+},
+{
+  "type": "node",
+  "id": 14068654767
+},
+{
+  "type": "node",
+  "id": 14079990887
+}
+
+  ]
+}

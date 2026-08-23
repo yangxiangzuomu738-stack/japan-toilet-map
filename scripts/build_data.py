@@ -156,6 +156,88 @@ def is_excluded(t):
     return False
 
 
+TOILET_DETAIL_TAGS = ("toilets:wheelchair", "toilets:disposal", "toilets:position",
+                      "toilets:access", "ostomate")
+
+
+# 「誰でも使えるトイレ」を集めるアプリなので、施設側の記録から拾うのは
+# 一般の人が入れる施設に限る。学校・幼稚園・福祉施設・役所以外の官公庁などは、
+# トイレの記録があっても外部の人は使えないため対象外とする。
+PUBLIC_AMENITY = {
+    "restaurant", "fast_food", "cafe", "pub", "bar", "biergarten", "ice_cream",
+    "food_court", "marketplace", "library", "community_centre", "townhall",
+    "public_building", "arts_centre", "theatre", "cinema", "place_of_worship",
+    "post_office", "pharmacy", "bank", "fuel", "parking", "parking_space",
+    "bus_station", "ferry_terminal", "public_bath", "hospital", "casino",
+    "nightclub", "events_venue", "conference_centre", "exhibition_centre",
+}
+PUBLIC_LEISURE = {
+    "park", "garden", "sports_centre", "swimming_pool", "water_park", "stadium",
+    "playground", "marina", "beach_resort", "pitch", "nature_reserve",
+}
+PUBLIC_TOURISM = {
+    "museum", "attraction", "information", "viewpoint", "theme_park", "zoo",
+    "aquarium", "camp_site", "picnic_site", "gallery", "artwork",
+}
+PUBLIC_HIGHWAY = {"rest_area", "services", "bus_stop"}
+PUBLIC_RAILWAY = {"station", "halt", "stop", "platform", "tram_stop"}
+PUBLIC_BUILDING = {"retail", "train_station", "commercial", "public", "civic"}
+
+
+def facility_is_public(t):
+    """一般の人が入れる施設か。判断できないものは対象外にする（安全側に倒す）。"""
+    if t.get("shop"):
+        return True
+    if t.get("amenity") in PUBLIC_AMENITY:
+        return True
+    if t.get("leisure") in PUBLIC_LEISURE:
+        return True
+    if t.get("tourism") in PUBLIC_TOURISM:
+        return True
+    if t.get("highway") in PUBLIC_HIGHWAY:
+        return True
+    if t.get("railway") in PUBLIC_RAILWAY:
+        return True
+    if t.get("public_transport") in ("station", "platform", "stop_position"):
+        return True
+    if t.get("historic"):
+        return True
+    if t.get("building") in PUBLIC_BUILDING:
+        return True
+    # building=yes のように種類が分からないものは、
+    # 「トイレあり」と明示されている場合だけ認める
+    if (t.get("toilets") or "").strip().lower() == "yes" and t.get("building"):
+        return True
+    return False
+
+
+def facility_has_toilet(t):
+    """施設側の記録から「トイレがある」と読み取れるか。
+
+    推測はしない。誰かが実際に記録した内容だけを根拠にする。
+      - toilets=yes / customers / limited / seasonal … 明示的に「トイレあり」
+      - toilets:wheelchair などトイレの設備の記録がある
+        … その設備を記録した人がトイレの存在を前提にしている
+    toilets=no（明示的に無い）と、トイレ自体の記録（amenity=toilets）は対象外。
+    """
+    if t.get("amenity") == "toilets":
+        return False
+    v = (t.get("toilets") or "").strip().lower()
+    if v == "no":
+        return False
+    if v in ("yes", "customers", "limited", "seasonal"):
+        return True
+    return any(t.get(k) for k in TOILET_DETAIL_TAGS)
+
+
+def facility_access_code(t):
+    """施設側の記録から利用条件を読む。toilets=customers は「客のみ」。"""
+    v = (t.get("toilets") or "").strip().lower()
+    if v == "customers":
+        return 2
+    return access_code(t)
+
+
 def facility_kind(t):
     """施設のタグから場所の種類を決める"""
     if t.get("railway") in ("station", "halt") or t.get("public_transport") == "station" \
@@ -329,16 +411,17 @@ def main():
                     per_pref[pr] += 1
 
     # ------------------------------------------------ 施設側 toilets=yes を足す
-    added = dup = 0
+    added = dup = not_public = 0
     if os.path.exists(FACILITY):
         with open(FACILITY, encoding="utf-8") as f:
             fac = json.load(f).get("elements", [])
         for el in fac:
             t = el.get("tags") or {}
-            if (t.get("toilets") or "").strip().lower() != "yes":
+            if not facility_has_toilet(t):
                 continue
-            if t.get("amenity") == "toilets":
-                continue  # 本体のトイレとして既に入っている
+            if not facility_is_public(t):
+                not_public += 1
+                continue
             if is_excluded(t):
                 excluded += 1
                 continue
@@ -379,7 +462,7 @@ def main():
             st = style_code(t)
             baby = tri(t.get("changing_table"))
             osto = tri(t.get("ostomate"))
-            acc = access_code(t)
+            acc = facility_access_code(t)
             oh = (t.get("opening_hours") or "").strip()
 
             points.append([round(lat * 1e5), round(lon * 1e5),
@@ -417,6 +500,7 @@ def main():
         "excluded_private": excluded,
         "missing_coordinates": no_coord,
         "facility_duplicates_skipped": dup,
+        "facility_not_public_skipped": not_public,
         "known": known,
         "place": {
             "with_place": stats["with_place"],
@@ -442,7 +526,8 @@ def main():
 
     print("入力要素数              : {}".format(len(elements)))
     print("トイレとして記録あり     : {}".format(stats["real"]))
-    print("施設に「トイレあり」のみ : {} （近くに実物があり省いた: {}）".format(added, dup))
+    print("施設に「トイレあり」のみ : {} （近くに実物があり省いた: {} / "
+          "一般の人が入れない施設として省いた: {}）".format(added, dup, not_public))
     print("掲載件数                : {}".format(len(points)))
     print("除外(private/no)        : {}".format(excluded))
     print("--- 場所が分かった件数 ---")
