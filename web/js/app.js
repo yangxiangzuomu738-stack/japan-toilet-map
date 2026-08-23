@@ -657,7 +657,9 @@
   }
 
   function searchLocalNames(q, limit) {
-    return window.TMData.searchNames(q, limit).map(function (g) {
+    var c = map ? map.getCenter() : null;
+    var center = c ? [c.lng, c.lat] : null;
+    return window.TMData.searchNames(q, limit, center).map(function (g) {
       var r = window.TMData.record(g.indexes[0]);
       var parts = [];
       if (g.count > 1) {
@@ -668,6 +670,8 @@
       } else if (r.placeKindLabel) {
         parts.push(r.placeKindLabel);
       }
+      // 同じ名前の店がいくつも出るので、地図の中心からの距離で見分けられるようにする
+      if (g.dist != null) parts.push('ここから' + fmtDistance(g.dist));
       if (r.pref) parts.push(r.pref);
       return {
         kind: 'toilet',

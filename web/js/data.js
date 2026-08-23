@@ -263,59 +263,90 @@
 
   /**
    * トイレの名前と場所の名前の両方から探す。
-   * 同じ施設のトイレは1つにまとめて返す（駅の中に何個もあるため）。
    *
-   * 返り値: [{ label, kind, indexes, count, lat, lon }, ...]
-   *   kind は 'toilet'（トイレ自身の名前で一致）か 'place'（施設名で一致）
+   * 同じ施設のトイレは1件にまとめる。ただし全国チェーン（セブン-イレブンなど）を
+   * ひとまとめにしても役に立たないので、名前が同じでも離れた店舗は別々に扱う。
+   * まとめる範囲は「同じ名前で 500m 以内」。
+   *
+   * 返り値: [{ label, kind, indexes, count, lat, lon, dist }, ...]
+   *   dist は center からのおおよその距離（メートル）。center 未指定なら null。
    */
-  function searchNames(query, limit) {
+  function searchNames(query, limit, center) {
     var d = store.details;
     if (!d) return [];
     var q = query.trim().toLowerCase();
     if (!q) return [];
 
-    var groups = {};
-    var order = [];
+    var MERGE_M = 500;
+    var byName = {};
+    var names = [];
     var scanned = 0;
+
     for (var i = 0; i < d.length; i++) {
       var nm = d[i][0] || '';
       var pl = d[i][4] || '';
       var hitName = nm && nm.toLowerCase().indexOf(q) !== -1;
       var hitPlace = pl && pl.toLowerCase().indexOf(q) !== -1;
       if (!hitName && !hitPlace) continue;
-
-      // トイレ自身に名前があればそれ単独、無ければ施設ごとにまとめる
-      var key, label, kind;
-      if (hitName) {
-        key = 'n:' + nm + ':' + i;
-        label = nm;
-        kind = 'toilet';
-      } else {
-        key = 'p:' + pl;
-        label = pl;
-        kind = 'place';
-      }
-      if (!groups[key]) {
-        groups[key] = {
-          label: label, kind: kind, indexes: [], count: 0,
-          lat: store.lat[i], lon: store.lon[i],
-          head: label.toLowerCase().indexOf(q) === 0 ? 0 : 1
-        };
-        order.push(key);
-      }
-      groups[key].indexes.push(i);
-      groups[key].count++;
+      var label = hitName ? nm : pl;
+      var kind = hitName ? 'toilet' : 'place';
+      var key = kind + ':' + label;
+      if (!byName[key]) { byName[key] = { label: label, kind: kind, items: [] }; names.push(key); }
+      byName[key].items.push(i);
       scanned++;
-      if (order.length >= limit * 6 || scanned > 4000) break;
+      if (scanned > 30000) break;
     }
 
-    var list = order.map(function (k) { return groups[k]; });
-    list.sort(function (a, b) {
+    // 同じ名前のものを、近いものどうしでまとめる
+    var groups = [];
+    names.forEach(function (key) {
+      var g = byName[key];
+      var clusters = [];
+      g.items.forEach(function (i) {
+        var la = store.lat[i], lo = store.lon[i];
+        var put = null;
+        for (var c = 0; c < clusters.length; c++) {
+          var cl = clusters[c];
+          var dy = (la - cl.lat) * 111000;
+          var dx = (lo - cl.lon) * 111000 * Math.cos(la * Math.PI / 180);
+          if (Math.sqrt(dx * dx + dy * dy) <= MERGE_M) { put = cl; break; }
+        }
+        if (!put) {
+          put = { lat: la, lon: lo, indexes: [] };
+          clusters.push(put);
+        }
+        put.indexes.push(i);
+        // 重心を更新する
+        var n = put.indexes.length;
+        put.lat += (la - put.lat) / n;
+        put.lon += (lo - put.lon) / n;
+      });
+      clusters.forEach(function (cl) {
+        groups.push({
+          label: g.label, kind: g.kind,
+          indexes: cl.indexes, count: cl.indexes.length,
+          lat: cl.lat, lon: cl.lon,
+          head: g.label.toLowerCase().indexOf(q) === 0 ? 0 : 1
+        });
+      });
+    });
+
+    var cx = center ? center[0] : null;
+    var cy = center ? center[1] : null;
+    groups.forEach(function (g) {
+      if (cx === null) { g.dist = null; return; }
+      var dy = (g.lat - cy) * 111000;
+      var dx = (g.lon - cx) * 111000 * Math.cos(cy * Math.PI / 180);
+      g.dist = Math.round(Math.sqrt(dx * dx + dy * dy));
+    });
+
+    groups.sort(function (a, b) {
       if (a.head !== b.head) return a.head - b.head;
       if (a.label.length !== b.label.length) return a.label.length - b.label.length;
+      if (cx !== null && a.dist !== b.dist) return a.dist - b.dist;
       return b.count - a.count;
     });
-    return list.slice(0, limit);
+    return groups.slice(0, limit);
   }
 
   global.TMData = {
