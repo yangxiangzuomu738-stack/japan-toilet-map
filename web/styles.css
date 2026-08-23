@@ -312,3 +312,33 @@ html.is-large-text { font-size: 112.5%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* 場所・施設内トイレ（BRIEF8） */
+.legend-item--facility { grid-template-columns: 40px minmax(0, 1fr); align-items: start; padding-top: var(--space-1); border-top: 1px solid var(--line); }
+.legend-marker--facility { width: 36px; height: 40px; margin-top: -4px; color: var(--unknown); }
+.legend-marker--facility svg { width: 32px; height: 40px; }
+
+.attribute-row--place { grid-template-columns: 32px minmax(0, 1fr); align-items: start; padding-top: var(--space-3); }
+.attribute-row--place .attribute-row__icon { padding-top: 2px; }
+.attribute-row--place .attribute-row__value--place { grid-column: 2; min-width: 0; margin: 0; color: var(--ink); text-align: left; overflow-wrap: anywhere; }
+
+.filter-group { display: grid; }
+.filter-group + .filter-group { margin-top: var(--space-4); border-top: 2px solid var(--line); }
+.filter-group__title { margin: var(--space-2) 0 0; font: var(--text-heading); }
+.filter-group__note { margin: var(--space-1) 0 var(--space-2); color: var(--muted); font: var(--text-meta); }
+.filter-group--feature .filter-group__title { margin-top: var(--space-4); }
+
+.list-item__place { color: var(--primary-strong); font: var(--text-meta); font-weight: 700; overflow-wrap: anywhere; }
+.tag--derived { color: var(--warning); background: var(--warning-soft); border-color: var(--warning); border-style: dashed; }
+.tag--place-station,
+.tag--place-shop,
+.tag--place-park,
+.tag--place-roadside,
+.tag--place-public { color: var(--muted); background: var(--canvas); border-color: var(--muted); border-style: dashed; }
+
+@media (max-width: 767px) {
+  .map-legend { max-height: min(180px, calc(100dvh - 260px)); padding: var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
+  .legend-list { gap: var(--space-1); }
+  .legend-item { font: var(--text-meta); }
+  .legend-item--facility { padding-top: var(--space-1); }
+}

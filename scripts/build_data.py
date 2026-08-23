@@ -2,20 +2,27 @@
 """Overpass の生データ -> web/data/*.json（アプリ用の軽量データ）
 
 入力:
-  data/national.json  … 日本全国（ISO3166-1=JP のエリア）の amenity=toilets 全件。これが正。
-  data/raw/JP-NN.json … 都道府県ごとの取得結果。都道府県コードの割り当てにのみ使う。
+  data/national.json         … 日本全国の amenity=toilets 全件。これが正。
+  data/raw/JP-NN.json        … 都道府県コードの割り当てに使う
+  data/place_assign.json     … 各トイレの「場所」（scripts/assign_places.py が作る）
+  data/facility_toilets.json … 施設側に toilets=yes と記録されている場所
 
 嘘をつかないための原則:
-  - タグが無い項目は「不明」(0) にする。false と「不明」を混同しない。
+  - タグが無い項目は「不明」(0)。false と「不明」を混同しない。
   - 推測でタグを補完しない。
-  - 都道府県が特定できないものは「不明」(0) のままにする。
+  - 施設に toilets=yes とあるだけのものは derived=1 とし、
+    「施設のどこかにある」ことしか分からないと明示できるようにする。
+  - 施設の wheelchair=yes は「施設が車いす対応」であってトイレの話ではないので、
+    derived の多目的トイレ判定には toilets:wheelchair だけを使う。
 """
-import json, os, glob, re, collections, datetime, sys
+import json, os, glob, re, math, collections, datetime, sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(BASE, "..", "data")
 RAW = os.path.join(DATA, "raw")
 NATIONAL = os.path.join(DATA, "national.json")
+PLACE_ASSIGN = os.path.join(DATA, "place_assign.json")
+FACILITY = os.path.join(DATA, "facility_toilets.json")
 OUT = os.path.join(BASE, "..", "web", "data")
 os.makedirs(OUT, exist_ok=True)
 
@@ -30,8 +37,19 @@ PREF_NAMES = {
     43: "熊本県", 44: "大分県", 45: "宮崎県", 46: "鹿児島県", 47: "沖縄県",
 }
 
+PLACE_KIND_NAMES = {0: "", 1: "駅・駅ビル", 2: "商業施設", 3: "公園",
+                    4: "道の駅・SA/PA", 5: "公共施設"}
+
 YES = {"yes", "designated", "true", "1"}
 NO = {"no", "false", "0"}
+R = 6371000.0
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    p = math.pi / 180
+    a = (math.sin((lat2 - lat1) * p / 2) ** 2 +
+         math.cos(lat1 * p) * math.cos(lat2 * p) * math.sin((lon2 - lon1) * p / 2) ** 2)
+    return 2 * R * math.asin(min(1.0, math.sqrt(a)))
 
 
 def tri(v):
@@ -59,6 +77,21 @@ def multi_code(t):
             return 2
         if v == "no":
             return 3
+    return 0
+
+
+def multi_code_facility(t):
+    """施設のタグから読む場合。施設の wheelchair はトイレの話ではないので使わない。"""
+    v = t.get("toilets:wheelchair")
+    if v is None:
+        return 0
+    v = v.strip().lower()
+    if v in ("yes", "designated"):
+        return 1
+    if v == "limited":
+        return 2
+    if v == "no":
+        return 3
     return 0
 
 
@@ -123,9 +156,29 @@ def is_excluded(t):
     return False
 
 
-# flags: multi(2) style(2) male(2) female(2) unisex(2) baby(2) ostomate(2)
-#        fee(2) access(2) h24(2) = 20bit,  pref(6bit) を上位に
-def pack(multi, style, male, female, unisex, baby, osto, fee, acc, h24, pref):
+def facility_kind(t):
+    """施設のタグから場所の種類を決める"""
+    if t.get("railway") in ("station", "halt") or t.get("public_transport") == "station" \
+            or t.get("building") == "train_station":
+        return 1
+    if t.get("shop") or t.get("building") == "retail" or t.get("amenity") == "marketplace":
+        return 2
+    if t.get("leisure") in ("park", "garden"):
+        return 3
+    if t.get("highway") in ("rest_area", "services"):
+        return 4
+    if t.get("amenity") in ("townhall", "library", "community_centre") \
+            or t.get("leisure") == "sports_centre":
+        return 5
+    return 0
+
+
+# flags:
+#   0-1 multi / 2-3 style / 4-5 male / 6-7 female / 8-9 unisex / 10-11 baby
+#   12-13 ostomate / 14-15 fee / 16-17 access / 18-19 h24 / 20-25 pref
+#   26 derived / 27-29 placeKind / 30 inside
+def pack(multi, style, male, female, unisex, baby, osto, fee, acc, h24,
+         pref, derived, place_kind, inside):
     f = (multi & 3)
     f |= (style & 3) << 2
     f |= (male & 3) << 4
@@ -137,11 +190,13 @@ def pack(multi, style, male, female, unisex, baby, osto, fee, acc, h24, pref):
     f |= (acc & 3) << 16
     f |= (h24 & 3) << 18
     f |= (pref & 63) << 20
+    f |= (1 if derived else 0) << 26
+    f |= (place_kind & 7) << 27
+    f |= (1 if inside else 0) << 30
     return f
 
 
 def load_pref_index():
-    """要素 -> 都道府県コード の対応表を都道府県別ファイルから作る"""
     index = {}
     for path in sorted(glob.glob(os.path.join(RAW, "JP-*.json"))):
         pref = int(os.path.basename(path)[3:5])
@@ -151,13 +206,34 @@ def load_pref_index():
     return index
 
 
+def pref_from_coords(lat, lon, pref_points):
+    """都道府県別ファイルに載っていないものは、最も近いトイレの都道府県を借りる"""
+    best = None
+    for plat, plon, pref in pref_points:
+        d = abs(plat - lat) + abs(plon - lon)
+        if best is None or d < best[0]:
+            best = (d, pref)
+    return best[1] if best and best[0] < 0.5 else 0
+
+
+CELL = 0.05
+
+
 def main():
     if not os.path.exists(NATIONAL):
-        print("data/national.json がありません。scripts/fetch_osm.py と全国クエリを先に実行してください。",
-              file=sys.stderr)
+        print("data/national.json がありません。先に全国データを取得してください。", file=sys.stderr)
         sys.exit(1)
 
     pref_index = load_pref_index()
+
+    place_assign = {}
+    if os.path.exists(PLACE_ASSIGN):
+        with open(PLACE_ASSIGN, encoding="utf-8") as f:
+            place_assign = json.load(f)
+        print("場所の割り当て: {} 件".format(len(place_assign)))
+    else:
+        print("警告: data/place_assign.json がありません。場所なしで作ります。", file=sys.stderr)
+
     with open(NATIONAL, encoding="utf-8") as f:
         elements = json.load(f).get("elements", [])
 
@@ -165,7 +241,9 @@ def main():
     points, details = [], []
     stats = collections.Counter()
     per_pref = collections.Counter()
-    excluded = no_coord = no_pref = 0
+    excluded = no_coord = 0
+    # 施設側 toilets=yes の重複判定に使う「実在するトイレ」の位置索引
+    grid = collections.defaultdict(list)
 
     for el in elements:
         key = (el.get("type"), el.get("id"))
@@ -187,10 +265,14 @@ def main():
             no_coord += 1
             continue
 
-        pref = pref_index.get(key, 0)
-        if pref == 0:
-            no_pref += 1
+        osmid = {"node": "n", "way": "w", "relation": "r"}[el["type"]] + str(el["id"])
+        pa = place_assign.get(osmid) or {}
+        place = pa.get("place", "")
+        place_kind = pa.get("kind", 0)
+        inside = bool(pa.get("inside"))
+        pdist = int(pa.get("dist", 0))
 
+        pref = pref_index.get(key, 0)
         m = multi_code(t)
         st = style_code(t)
         male = tri(t.get("male"))
@@ -204,56 +286,175 @@ def main():
         h24 = h24_code(oh)
 
         points.append([round(lat * 1e5), round(lon * 1e5),
-                       pack(m, st, male, female, uni, baby, osto, fee, acc, h24, pref)])
+                       pack(m, st, male, female, uni, baby, osto, fee, acc, h24,
+                            pref, False, place_kind, inside)])
+        details.append([
+            (t.get("name") or t.get("name:ja") or "").strip(),
+            oh,
+            (t.get("operator") or t.get("operator:ja") or "").strip(),
+            osmid,
+            place,
+            pdist if not inside else 0,
+        ])
 
-        name = (t.get("name") or t.get("name:ja") or "").strip()
-        operator = (t.get("operator") or t.get("operator:ja") or "").strip()
-        osmid = {"node": "n", "way": "w", "relation": "r"}[el["type"]] + str(el["id"])
-        details.append([name, oh, operator, osmid])
+        grid[(int(lat / CELL), int(lon / CELL))].append((lat, lon))
 
         stats["total"] += 1
+        stats["real"] += 1
         if pref:
             per_pref[pref] += 1
+        if place:
+            stats["with_place"] += 1
+            stats["place_inside" if inside else "place_near"] += 1
+            stats["placekind{}".format(place_kind)] += 1
         for label, val in (("multi", m), ("style", st), ("male", male), ("female", female),
                            ("unisex", uni), ("baby", baby), ("ostomate", osto),
                            ("fee", fee), ("access", acc), ("h24", h24)):
-            stats[f"{label}={val}"] += 1
-        if name:
+            stats["{}={}".format(label, val)] += 1
+        if details[-1][0]:
             stats["named"] += 1
 
-    # 「分かっている件数」＝ 不明(0) 以外
+    # 都道府県コードが分からなかったものを、近くのトイレから補う
+    pref_points = []
+    for i, p in enumerate(points):
+        pr = (p[2] >> 20) & 63
+        if pr:
+            pref_points.append((p[0] / 1e5, p[1] / 1e5, pr))
+    if pref_points:
+        for i, p in enumerate(points):
+            if ((p[2] >> 20) & 63) == 0:
+                pr = pref_from_coords(p[0] / 1e5, p[1] / 1e5, pref_points)
+                if pr:
+                    points[i][2] |= (pr & 63) << 20
+                    per_pref[pr] += 1
+
+    # ------------------------------------------------ 施設側 toilets=yes を足す
+    added = dup = 0
+    if os.path.exists(FACILITY):
+        with open(FACILITY, encoding="utf-8") as f:
+            fac = json.load(f).get("elements", [])
+        for el in fac:
+            t = el.get("tags") or {}
+            if (t.get("toilets") or "").strip().lower() != "yes":
+                continue
+            if t.get("amenity") == "toilets":
+                continue  # 本体のトイレとして既に入っている
+            if is_excluded(t):
+                excluded += 1
+                continue
+            if el["type"] == "node":
+                lat, lon = el.get("lat"), el.get("lon")
+            else:
+                c = el.get("center") or {}
+                lat, lon = c.get("lat"), c.get("lon")
+            if lat is None or lon is None:
+                no_coord += 1
+                continue
+
+            # 近くに本物のトイレの記録があるなら、そちらの方が正確なので足さない
+            near = False
+            cy, cx = int(lat / CELL), int(lon / CELL)
+            for dy in (-1, 0, 1):
+                for dx in (-1, 0, 1):
+                    for (tlat, tlon) in grid.get((cy + dy, cx + dx), ()):
+                        if haversine(lat, lon, tlat, tlon) <= 120:
+                            near = True
+                            break
+                    if near:
+                        break
+                if near:
+                    break
+            if near:
+                dup += 1
+                continue
+
+            name = (t.get("name") or t.get("name:ja") or "").strip()
+            kind = facility_kind(t)
+            osmid = {"node": "n", "way": "w", "relation": "r"}[el["type"]] + str(el["id"])
+            pref = pref_index.get((el.get("type"), el.get("id")), 0)
+            if not pref and pref_points:
+                pref = pref_from_coords(lat, lon, pref_points)
+
+            m = multi_code_facility(t)
+            st = style_code(t)
+            baby = tri(t.get("changing_table"))
+            osto = tri(t.get("ostomate"))
+            acc = access_code(t)
+            oh = (t.get("opening_hours") or "").strip()
+
+            points.append([round(lat * 1e5), round(lon * 1e5),
+                           pack(m, st, 0, 0, 0, baby, osto, 0, acc, h24_code(oh),
+                                pref, True, kind, True)])
+            # トイレ自身の名前は記録されていないので空にし、施設名は「場所」に入れる
+            # （「イオンモール ／ イオンモール の中」のような重複表示を避ける）
+            details.append(["", oh,
+                            (t.get("operator") or "").strip(), osmid, name, 0])
+            added += 1
+            stats["total"] += 1
+            stats["derived"] += 1
+            if pref:
+                per_pref[pref] += 1
+            if name:
+                stats["with_place"] += 1
+                stats["place_inside"] += 1
+                stats["placekind{}".format(kind)] += 1
+            for label, val in (("multi", m), ("style", st), ("male", 0), ("female", 0),
+                               ("unisex", 0), ("baby", baby), ("ostomate", osto),
+                               ("fee", 0), ("access", acc), ("h24", h24_code(oh))):
+                stats["{}={}".format(label, val)] += 1
+
     known = {}
-    for label in ("multi", "style", "male", "female", "unisex", "baby", "ostomate", "fee", "access", "h24"):
-        known[label] = stats["total"] - stats[f"{label}=0"]
+    for label in ("multi", "style", "male", "female", "unisex", "baby",
+                  "ostomate", "fee", "access", "h24"):
+        known[label] = stats["total"] - stats["{}=0".format(label)]
 
     meta = {
         "generated": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "count": len(points),
+        "count_real": stats["real"],
+        "count_derived": stats["derived"],
         "source": "OpenStreetMap contributors (ODbL) / Overpass API",
         "excluded_private": excluded,
         "missing_coordinates": no_coord,
-        "prefecture_unknown": no_pref,
+        "facility_duplicates_skipped": dup,
         "known": known,
-        "prefectures": {str(k): {"name": PREF_NAMES[k], "count": per_pref[k]} for k in sorted(per_pref)},
+        "place": {
+            "with_place": stats["with_place"],
+            "inside": stats["place_inside"],
+            "near": stats["place_near"],
+            "kinds": {str(k): {"name": PLACE_KIND_NAMES[k],
+                               "count": stats["placekind{}".format(k)]}
+                      for k in range(1, 6)},
+        },
+        "prefectures": {str(k): {"name": PREF_NAMES[k], "count": per_pref[k]}
+                        for k in sorted(per_pref)},
     }
 
     with open(os.path.join(OUT, "points.json"), "w", encoding="utf-8") as f:
         json.dump({"meta": meta, "points": points}, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "details.json"), "w", encoding="utf-8") as f:
-        json.dump({"count": len(details), "details": details}, f, ensure_ascii=False, separators=(",", ":"))
+        json.dump({"count": len(details), "details": details}, f,
+                  ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     with open(os.path.join(DATA, "stats.json"), "w", encoding="utf-8") as f:
         json.dump({"meta": meta, "stats": dict(stats)}, f, ensure_ascii=False, indent=2)
 
-    print(f"入力要素数        : {len(elements)}")
-    print(f"掲載件数          : {len(points)}")
-    print(f"除外(private/no)  : {excluded}")
-    print(f"座標なしで除外    : {no_coord}")
-    print(f"都道府県が不明    : {no_pref}")
+    print("入力要素数              : {}".format(len(elements)))
+    print("トイレとして記録あり     : {}".format(stats["real"]))
+    print("施設に「トイレあり」のみ : {} （近くに実物があり省いた: {}）".format(added, dup))
+    print("掲載件数                : {}".format(len(points)))
+    print("除外(private/no)        : {}".format(excluded))
+    print("--- 場所が分かった件数 ---")
+    print("  合計    : {} ({:.1f}%)".format(
+        stats["with_place"], stats["with_place"] * 100.0 / max(1, len(points))))
+    print("  施設の中: {}".format(stats["place_inside"]))
+    print("  施設のそば: {}".format(stats["place_near"]))
+    for k in range(1, 6):
+        print("  {}: {}".format(PLACE_KIND_NAMES[k], stats["placekind{}".format(k)]))
     print("--- 項目が分かっている件数 ---")
     for k, v in known.items():
-        print(f"  {k:9s}: {v:6d}  ({v * 100.0 / max(1, len(points)):.1f}%)")
+        print("  {:9s}: {:6d}  ({:.1f}%)".format(k, v, v * 100.0 / max(1, len(points))))
 
 
 if __name__ == "__main__":

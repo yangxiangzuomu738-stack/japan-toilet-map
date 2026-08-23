@@ -21,6 +21,7 @@
     free: frame('<path d="M4 8h16v11H4z"/><path d="M8 8V5h8v3M8 13h8M7 17h2M12 17h5"/>'),
     clock: frame('<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3.5 2"/>'),
     public: frame('<path d="M4 20h16M6 20V9l6-5 6 5v11M9 20v-6h6v6M9 10h.01M15 10h.01"/>'),
+    place: frame('<path d="M4 20h16M6 20V9l6-5 6 5v11M9 20v-6h6v6M9 10h.01M15 10h.01"/><path d="M18 4.5c0 2.7-4 5-4 5s-4-2.3-4-5a4 4 0 1 1 8 0Z" fill="currentColor" stroke="none"/><circle cx="14" cy="4.5" r="1" fill="white" stroke="none"/>'),
     operator: frame('<circle cx="12" cy="8" r="3"/><path d="M5 20c.8-3.5 3.2-5 7-5s6.2 1.5 7 5"/>'),
     search: frame('<circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4 4"/>'),
     location: frame('<path d="M20 10.5c0 5.4-8 10-8 10s-8-4.6-8-10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10.5" r="2.5"/>'),
@@ -52,6 +53,30 @@
         : '<path d="M12.5 12a3.6 3.6 0 1 1 5.9 2.8c-1.5 1.2-2.5 2.1-2.5 4.2" stroke="white" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="23" r="1.2" fill="white" stroke="none"/>';
     var ring = selected ? '<path d="M16 1.5c-7.2 0-13 5.8-13 13 0 9.3 13 23.5 13 23.5S29 23.8 29 14.5c0-7.2-5.8-13-13-13Z" fill="none" stroke="currentColor" stroke-width="5" opacity=".35"/>' : '';
     return '<svg class="tm-marker tm-marker--' + state + (selected ? ' tm-marker--selected' : '') + '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" aria-hidden="true" focusable="false">' + ring + outer + symbol + '</svg>';
+  };
+
+  /* 施設にトイレがあることだけが記録され、正確な位置が分からない場合の印。
+     先端を持たない破線の面で「施設のどこか」を示し、kind は外形と記号の両方で区別する。 */
+  icons.facilityMarker = function (kind, selected) {
+    var state = kind === "yes" || kind === "no" ? kind : "unknown";
+    var outer = state === "yes"
+      ? '<circle cx="16" cy="20" r="14" fill="currentColor" stroke="white" stroke-width="2.5" stroke-dasharray="4 3"/>'
+      : state === "no"
+        ? '<rect x="3" y="7" width="26" height="26" rx="4" fill="currentColor" stroke="white" stroke-width="2.5" stroke-dasharray="4 3"/>'
+        : '<path d="M16 4 29 20 16 36 3 20Z" fill="currentColor" stroke="white" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="4 3"/>';
+    var symbol = state === "yes"
+      ? '<circle cx="16" cy="14" r="2" fill="white" stroke="none"/><path d="M13 18h4l2 3h3M14 19l-1 5h4l2 5M13 24l-3 4M17 24l-1 5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+      : state === "no"
+        ? '<path d="M10 14 22 26M22 14 10 26" stroke="white" stroke-width="3" stroke-linecap="round"/>'
+        : '<path d="M12.5 16a3.6 3.6 0 1 1 5.9 2.8c-1.5 1.2-2.5 2.1-2.5 4.2" stroke="white" stroke-width="2.2" stroke-linecap="round"/><circle cx="16" cy="27" r="1.2" fill="white" stroke="none"/>';
+    var ring = selected
+      ? state === "yes"
+        ? '<circle cx="16" cy="20" r="15.5" fill="none" stroke="currentColor" stroke-width="3" opacity=".35"/>'
+        : state === "no"
+          ? '<rect x="1.5" y="5.5" width="29" height="29" rx="5" fill="none" stroke="currentColor" stroke-width="3" opacity=".35"/>'
+          : '<path d="M16 2 30.5 20 16 38 1.5 20Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" opacity=".35"/>'
+      : '';
+    return '<svg class="tm-marker tm-marker--facility tm-marker--' + state + (selected ? ' tm-marker--selected' : '') + '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 40" aria-hidden="true" focusable="false">' + ring + outer + symbol + '</svg>';
   };
 
   window.TMIcons = icons;

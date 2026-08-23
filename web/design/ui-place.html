@@ -1,0 +1,52 @@
+<!-- BRIEF8: 場所の情報。以下を該当する既存要素へ追加または置換する。 -->
+
+<!-- #map-legend の .legend-list に追加。JSは facilityMarker('unknown', false) を入れる。 -->
+<li class="legend-item legend-item--facility">
+  <span class="legend-marker legend-marker--facility icon-slot" id="legend-marker-facility" aria-hidden="true"></span>
+  <span>この施設のどこかにトイレあり（正確な場所は不明）</span>
+</li>
+
+<!-- #detail-panel の #attribute-list のいちばん上に追加。値は place / inside / placeDistance から設定する。 -->
+<div class="attribute-row attribute-row--place">
+  <dt class="attribute-row__icon icon-slot" id="attribute-place-icon" aria-hidden="true"></dt>
+  <dt class="attribute-row__label">場所</dt>
+  <dd class="attribute-row__value attribute-row__value--place" id="attribute-place-value">新宿駅 の中</dd>
+</div>
+
+<!-- #attribute-list の直後、#detail-unknown-note と同じ並びに追加。derived: true のときだけ hidden を外す。 -->
+<p class="detail-note" id="detail-derived-note" hidden>この施設に「トイレあり」と記録されていますが、<br>建物のどこにあるかまでは記録されていません。<br>地図の印は施設の代表点です。</p>
+
+<!-- #filter-panel の .filter-list を以下の構成にする。既存の設備・条件は後半のグループへ移す。 -->
+<div class="filter-group filter-group--place" role="group" aria-labelledby="filter-place-heading" aria-describedby="filter-place-note">
+  <h3 class="filter-group__title" id="filter-place-heading">場所の種類</h3>
+  <p class="filter-group__note" id="filter-place-note">選んだ場所のどれかに当てはまるトイレを表示します。</p>
+  <label class="filter-option"><input class="filter-option__control" id="filter-place-station" type="checkbox"><span class="filter-option__label">駅・駅ビルの中</span></label>
+  <label class="filter-option"><input class="filter-option__control" id="filter-place-shop" type="checkbox"><span><span class="filter-option__label">商業施設の中</span><span class="filter-option__hint">スーパー・百貨店・ショッピングモールなど</span></span></label>
+  <label class="filter-option"><input class="filter-option__control" id="filter-place-park" type="checkbox"><span class="filter-option__label">公園の中</span></label>
+  <label class="filter-option"><input class="filter-option__control" id="filter-place-roadside" type="checkbox"><span class="filter-option__label">道の駅・サービスエリア</span></label>
+  <label class="filter-option"><input class="filter-option__control" id="filter-place-public" type="checkbox"><span><span class="filter-option__label">公共施設の中</span><span class="filter-option__hint">市役所・図書館・公民館など</span></span></label>
+</div>
+
+<div class="filter-group filter-group--feature" role="group" aria-labelledby="filter-feature-heading">
+  <h3 class="filter-group__title" id="filter-feature-heading">設備・条件</h3>
+  <!-- 既存の #filter-multi ～ #filter-public の .filter-option をここへ移す。 -->
+</div>
+
+<!-- #list-item-template の .list-item__content を以下の構成にする。 -->
+<span class="list-item__content">
+  <span class="list-item__name">新宿駅</span>
+  <span class="list-item__place">駅・駅ビルの中</span>
+  <span class="list-item__meta">地図の中心から 約240 m ・ 東京都</span>
+  <span class="list-item__tags">
+    <span class="tag tag--place-station">駅の中</span>
+    <span class="tag tag--derived">施設内（場所不明）</span>
+    <span class="tag tag--multi">車いす対応</span>
+  </span>
+</span>
+
+<!-- 一覧の値の使い分け（JavaScriptへの指定）
+  1. トイレ名がある: .list-item__name = トイレ名、.list-item__place = 「{place} の中」または「{place} のそば（約{placeDistance}m）」。
+  2. トイレ名がなく place がある: .list-item__name = place（主役）、.list-item__place = 「駅・駅ビルの中」などの場所の種類・位置関係。
+  3. 両方ない: .list-item__name = 「名前の情報はありません」、.list-item__place は hidden または空。
+  4. derived: true: .list-item__marker に facilityMarker(kind, false) を入れ、.tag--derived「施設内（場所不明）」を必ず追加する。
+-->

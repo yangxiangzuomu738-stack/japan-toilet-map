@@ -114,3 +114,29 @@
 PCで一覧と詳細を同時に開く場合は、両パネルを左から順に16pxの間隔で配置します。幅900px以上では各パネルを最大390px、768〜899pxでは利用可能幅の半分まで縮めるため、重なったり画面外に出たりしません。スマホでは一覧と詳細はアプリ側で切り替えて表示します。
 
 追加クラス: `side-panel--list`, `list-panel__content`, `list-summary`, `list-count`, `list-note`, `list-sort`, `list-sort__label`, `list-sort__select`, `list-items`, `list-items__item`, `list-item`, `list-item__marker`, `list-item__content`, `list-item__name`, `list-item__meta`, `list-item__tags`, `tag`, `tag--multi`, `tag--style`, `tag--hours`, `tag--unknown`, `list-empty`。
+
+## 9. 場所と施設内のトイレ
+
+### 施設にあるが、正確な位置が不明な記録
+
+`derived: true` は「施設にトイレがある」という記録であり、トイレそのものの位置ではありません。この場合は通常の`TMIcons.marker(kind, selected)`ではなく、`TMIcons.facilityMarker(kind, selected)`を使います。どの状態も先端のない面の形にし、白い破線の外周で「施設の範囲・おおよその位置」を示します。`yes`は円、`no`は角丸の四角、`unknown`はひし形で、中央の車いす／×／？も通常のマーカーと同じ意味です。選択中は外側の淡い輪郭を加えます。色を認識しにくい場合にも、通常の尖ったピンと破線・先端なしの形を区別できます。
+
+`#map-legend`には`#legend-marker-facility.legend-marker--facility`を持つ`.legend-item--facility`を追加し、「この施設のどこかにトイレあり（正確な場所は不明）」と説明します。凡例のこの行は短い文字と区切り線で既存の車いす状態と分けます。スマホでは凡例を最大180px（地図の表示域に応じてさらに小さく）にして縦スクロール可能にし、追加行で地図を隠し続けないようにします。
+
+### 詳細・絞り込み
+
+詳細の属性一覧の先頭に`.attribute-row--place`を置きます。`#attribute-place-icon`には`TMIcons.place`（建物と目印を組み合わせたSVG）を入れ、`#attribute-place-value`には`place`、`inside`、`placeDistance`から「新宿駅 の中」「日比谷公園 のそば（約35m）」のような値を設定します。場所が分からないときは「不明」です。この値だけは2列の行にして、長い施設名が右寄せの1行に切り詰められず、全文を折り返して読めるようにします。
+
+`derived: true`のときだけ、属性一覧の直後に`#detail-derived-note.detail-note`を表示します。文章は「この施設に『トイレあり』と記録されていますが、建物のどこにあるかまでは記録されていません。地図の印は施設の代表点です。」です。`#detail-unknown-note`とは別に表示でき、両方が表示されても同じ注意の体裁で意味が伝わります。
+
+絞り込みは`.filter-group--place`と`.filter-group--feature`に分けます。`#filter-place-heading`は「場所の種類」、`#filter-feature-heading`は「設備・条件」です。場所の種類には`#filter-place-station`、`#filter-place-shop`、`#filter-place-park`、`#filter-place-roadside`、`#filter-place-public`を置き、「選んだ場所のどれかに当てはまるトイレを表示します」と明記します。これにより、複数選択が設備条件とのAND条件ではなく、場所の選択肢どうしのOR条件であることを伝えます。
+
+### 一覧
+
+`#list-item-template`では`.list-item__place`を`.list-item__name`と`.list-item__meta`の間に置きます。トイレ名があれば`.list-item__name`にはその名前を、`.list-item__place`には「新宿駅 の中」のような場所名と位置関係を入れます。トイレ名がなく`place`があれば、`.list-item__name`には施設名を入れて主役にし、`.list-item__place`には「駅・駅ビルの中」などの種類・位置関係を入れます。「名前の情報はありません」は場所も不明な場合だけにします。`derived: true`には施設マーカーと`.tag--derived`（「施設内（場所不明）」）を必ず併用します。
+
+場所の種類の札は`.tag--place-station`、`.tag--place-shop`、`.tag--place-park`、`.tag--place-roadside`、`.tag--place-public`です。文字はそれぞれ「駅の中」「商業施設の中」「公園の中」「道の駅・SA/PA」「公共施設の中」とします。設備の札の実線と異なり、場所の札は破線の枠と落ち着いた背景にして、意味の違いを色だけに頼らず示します。
+
+追加id: `legend-marker-facility`, `attribute-place-icon`, `attribute-place-value`, `detail-derived-note`, `filter-place-heading`, `filter-place-note`, `filter-place-station`, `filter-place-shop`, `filter-place-park`, `filter-place-roadside`, `filter-place-public`, `filter-feature-heading`。
+
+追加クラス: `legend-item--facility`, `legend-marker--facility`, `attribute-row--place`, `attribute-row__value--place`, `filter-group`, `filter-group--place`, `filter-group--feature`, `filter-group__title`, `filter-group__note`, `list-item__place`, `tag--derived`, `tag--place-station`, `tag--place-shop`, `tag--place-park`, `tag--place-roadside`, `tag--place-public`。

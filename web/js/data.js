@@ -2,25 +2,28 @@
  * data.js — トイレデータの読み込み・復号・絞り込み
  *
  * points.json  : { meta, points: [[latE5, lonE5, flags], ...] }
- * details.json : { count, details: [[name, hours, operator, osmid], ...] }
+ * details.json : { count, details: [[name, hours, operator, osmid, place, dist], ...] }
  *
  * flags のビット割り当て（scripts/build_data.py と対応）
- *   bit  0-1  multi    0=不明 1=あり 2=一部対応 3=なし
- *   bit  2-3  style    0=不明 1=洋式 2=和式 3=両方
- *   bit  4-5  male     0=不明 1=あり 2=なし
- *   bit  6-7  female   0=不明 1=あり 2=なし
- *   bit  8-9  unisex   0=不明 1=あり 2=なし
- *   bit 10-11 baby     0=不明 1=あり 2=なし
- *   bit 12-13 ostomate 0=不明 1=あり 2=なし
- *   bit 14-15 fee      0=不明 1=有料 2=無料
- *   bit 16-17 access   0=不明 1=誰でも 2=施設利用者・客のみ 3=その他条件付き
- *   bit 18-19 h24      0=不明 1=24時間 2=時間制限あり
- *   bit 20-25 pref     都道府県コード 1-47
+ *   bit  0-1  multi     0=不明 1=あり 2=一部対応 3=なし
+ *   bit  2-3  style     0=不明 1=洋式 2=和式 3=両方
+ *   bit  4-5  male      0=不明 1=あり 2=なし
+ *   bit  6-7  female    0=不明 1=あり 2=なし
+ *   bit  8-9  unisex    0=不明 1=あり 2=なし
+ *   bit 10-11 baby      0=不明 1=あり 2=なし
+ *   bit 12-13 ostomate  0=不明 1=あり 2=なし
+ *   bit 14-15 fee       0=不明 1=有料 2=無料
+ *   bit 16-17 access    0=不明 1=誰でも 2=施設利用者・客のみ 3=その他条件付き
+ *   bit 18-19 h24       0=不明 1=24時間 2=時間の決まりあり
+ *   bit 20-25 pref      都道府県コード 1-47
+ *   bit 26    derived   1=施設に「トイレあり」と記録されているだけ（正確な位置は不明）
+ *   bit 27-29 placeKind 0=なし 1=駅・駅ビル 2=商業施設 3=公園 4=道の駅・SA/PA 5=公共施設
+ *   bit 30    inside    1=その施設の中 0=そば
  */
 (function (global) {
   'use strict';
 
-  var UNKNOWN = 0, YES = 1, NO = 2;
+  var YES = 1, NO = 2;
 
   function f_multi(f) { return f & 3; }
   function f_style(f) { return (f >> 2) & 3; }
@@ -33,6 +36,9 @@
   function f_access(f) { return (f >> 16) & 3; }
   function f_h24(f) { return (f >> 18) & 3; }
   function f_pref(f) { return (f >> 20) & 63; }
+  function f_derived(f) { return (f >> 26) & 1; }
+  function f_placeKind(f) { return (f >> 27) & 7; }
+  function f_inside(f) { return (f >> 30) & 1; }
 
   var PREF_NAMES = {
     1: '北海道', 2: '青森県', 3: '岩手県', 4: '宮城県', 5: '秋田県', 6: '山形県',
@@ -45,7 +51,15 @@
     43: '熊本県', 44: '大分県', 45: '宮崎県', 46: '鹿児島県', 47: '沖縄県'
   };
 
-  // --- 表示用ラベル（不明は「不明」と正直に出す）---------------------------
+  // 場所の種類（1〜5）。表示名と、絞り込みキー、一覧の札のラベル。
+  var PLACE_KINDS = {
+    1: { key: 'station', name: '駅・駅ビル', inside: '駅・駅ビルの中', tag: '駅の中' },
+    2: { key: 'shop', name: '商業施設', inside: '商業施設の中', tag: '商業施設の中' },
+    3: { key: 'park', name: '公園', inside: '公園の中', tag: '公園の中' },
+    4: { key: 'roadside', name: '道の駅・SA/PA', inside: '道の駅・サービスエリア', tag: '道の駅・SA/PA' },
+    5: { key: 'public', name: '公共施設', inside: '公共施設の中', tag: '公共施設の中' }
+  };
+
   var LABEL = {
     multi: { 0: '不明', 1: 'あり', 2: '一部対応', 3: 'なし' },
     style: { 0: '不明', 1: '洋式', 2: '和式', 3: '洋式・和式の両方' },
@@ -58,11 +72,11 @@
   var store = {
     ready: false,
     meta: null,
-    lat: null,     // Float64Array
-    lon: null,     // Float64Array
-    flags: null,   // Int32Array
+    lat: null,
+    lon: null,
+    flags: null,
     count: 0,
-    details: null  // 遅延読み込み
+    details: null
   };
 
   function load(pointsUrl) {
@@ -102,21 +116,23 @@
   }
 
   /**
-   * 絞り込み条件。すべて false のときは全件。
-   * 「不明」を除外はしない（不明を消すと情報が偏るため、明示的に選んだ条件のみ適用）。
+   * 絞り込み条件。
+   * 設備・条件（multi 〜 anyone）は「すべてを満たす」。
+   * 場所の種類（places）は「選んだどれかに当てはまる」。
    */
   function defaultFilter() {
     return {
-      multi: false,      // 多目的トイレあり
-      seated: false,     // 洋式あり
-      squat: false,      // 和式あり
-      separated: false,  // 男女別あり
-      unisex: false,     // 共用あり
-      baby: false,       // おむつ交換台あり
-      ostomate: false,   // オストメイト対応
-      h24: false,        // 24時間
-      free: false,       // 無料
-      anyone: false      // 誰でも利用可（客のみを除く）
+      multi: false,
+      seated: false,
+      squat: false,
+      separated: false,
+      unisex: false,
+      baby: false,
+      ostomate: false,
+      h24: false,
+      free: false,
+      anyone: false,
+      places: []          // 1〜5 の配列。空なら場所で絞らない。
     };
   }
 
@@ -131,10 +147,15 @@
     if (q.h24 && f_h24(f) !== 1) return false;
     if (q.free && f_fee(f) !== NO) return false;
     if (q.anyone && f_access(f) === 2) return false;
+    if (q.places && q.places.length) {
+      // 「〜の中」だけを対象にする（そばにあるだけのものは含めない）
+      if (!f_inside(f)) return false;
+      if (q.places.indexOf(f_placeKind(f)) === -1) return false;
+    }
     return true;
   }
 
-  /** マーカーの種類: 'yes'（多目的あり） / 'no'（なし・一部） / 'unknown'（不明） */
+  /** マーカーの種類: 'yes' / 'no' / 'unknown' （車いす対応の有無） */
   function markerKind(f) {
     var m = f_multi(f);
     if (m === 1) return 'yes';
@@ -142,10 +163,8 @@
     return 'no';
   }
 
-  /**
-   * 絞り込み結果を GeoJSON にする。
-   * properties は軽量に保ち（i と k のみ）、詳細は選択時に details から引く。
-   */
+  function isDerived(f) { return f_derived(f) === 1; }
+
   function toGeoJSON(q) {
     var feats = [];
     var lat = store.lat, lon = store.lon, fl = store.flags, n = store.count;
@@ -156,7 +175,7 @@
         type: 'Feature',
         id: i,
         geometry: { type: 'Point', coordinates: [lon[i], lat[i]] },
-        properties: { i: i, k: markerKind(f) }
+        properties: { i: i, k: markerKind(f), d: f_derived(f) }
       });
     }
     return { type: 'FeatureCollection', features: feats };
@@ -168,10 +187,21 @@
     return c;
   }
 
-  /** 1件分の情報を、表示に使いやすい形にして返す */
+  /** 場所を表す文（例「新宿駅 の中」「日比谷公園 のそば（約35m）」） */
+  function placeText(place, inside, dist) {
+    if (!place) return '';
+    if (inside) return place + ' の中';
+    if (dist > 0) return place + ' のそば（約' + dist + 'm）';
+    return place + ' のそば';
+  }
+
   function record(i) {
     var f = store.flags[i];
     var d = store.details ? store.details[i] : null;
+    var kind = f_placeKind(f);
+    var inside = f_inside(f) === 1;
+    var place = d ? (d[4] || '') : '';
+    var dist = d ? (d[5] || 0) : 0;
     return {
       index: i,
       lat: store.lat[i],
@@ -180,6 +210,16 @@
       hours: d ? (d[1] || '') : '',
       operator: d ? (d[2] || '') : '',
       osmid: d ? (d[3] || '') : '',
+      place: place,
+      placeKind: kind,
+      placeKindName: PLACE_KINDS[kind] ? PLACE_KINDS[kind].name : '',
+      placeKindLabel: PLACE_KINDS[kind] ? (inside ? PLACE_KINDS[kind].inside : PLACE_KINDS[kind].name) : '',
+      placeKindTag: PLACE_KINDS[kind] ? PLACE_KINDS[kind].tag : '',
+      placeKindKey: PLACE_KINDS[kind] ? PLACE_KINDS[kind].key : '',
+      inside: inside,
+      placeDistance: dist,
+      placeText: placeText(place, inside, dist),
+      derived: f_derived(f) === 1,
       pref: PREF_NAMES[f_pref(f)] || '',
       code: {
         multi: f_multi(f), style: f_style(f), male: f_male(f), female: f_female(f),
@@ -201,7 +241,6 @@
     };
   }
 
-  /** OSM 要素 URL（出典をたどれるようにする） */
   function osmUrl(osmid) {
     if (!osmid) return null;
     var t = { n: 'node', w: 'way', r: 'relation' }[osmid[0]];
@@ -209,7 +248,6 @@
     return 'https://www.openstreetmap.org/' + t + '/' + osmid.slice(1);
   }
 
-  /** 画面内の該当件数（表示中のリスト用） */
   function inBounds(q, bounds, limit) {
     var out = [];
     var lat = store.lat, lon = store.lon, fl = store.flags, n = store.count;
@@ -223,6 +261,63 @@
     return out;
   }
 
+  /**
+   * トイレの名前と場所の名前の両方から探す。
+   * 同じ施設のトイレは1つにまとめて返す（駅の中に何個もあるため）。
+   *
+   * 返り値: [{ label, kind, indexes, count, lat, lon }, ...]
+   *   kind は 'toilet'（トイレ自身の名前で一致）か 'place'（施設名で一致）
+   */
+  function searchNames(query, limit) {
+    var d = store.details;
+    if (!d) return [];
+    var q = query.trim().toLowerCase();
+    if (!q) return [];
+
+    var groups = {};
+    var order = [];
+    var scanned = 0;
+    for (var i = 0; i < d.length; i++) {
+      var nm = d[i][0] || '';
+      var pl = d[i][4] || '';
+      var hitName = nm && nm.toLowerCase().indexOf(q) !== -1;
+      var hitPlace = pl && pl.toLowerCase().indexOf(q) !== -1;
+      if (!hitName && !hitPlace) continue;
+
+      // トイレ自身に名前があればそれ単独、無ければ施設ごとにまとめる
+      var key, label, kind;
+      if (hitName) {
+        key = 'n:' + nm + ':' + i;
+        label = nm;
+        kind = 'toilet';
+      } else {
+        key = 'p:' + pl;
+        label = pl;
+        kind = 'place';
+      }
+      if (!groups[key]) {
+        groups[key] = {
+          label: label, kind: kind, indexes: [], count: 0,
+          lat: store.lat[i], lon: store.lon[i],
+          head: label.toLowerCase().indexOf(q) === 0 ? 0 : 1
+        };
+        order.push(key);
+      }
+      groups[key].indexes.push(i);
+      groups[key].count++;
+      scanned++;
+      if (order.length >= limit * 6 || scanned > 4000) break;
+    }
+
+    var list = order.map(function (k) { return groups[k]; });
+    list.sort(function (a, b) {
+      if (a.head !== b.head) return a.head - b.head;
+      if (a.label.length !== b.label.length) return a.label.length - b.label.length;
+      return b.count - a.count;
+    });
+    return list.slice(0, limit);
+  }
+
   global.TMData = {
     load: load,
     loadDetails: loadDetails,
@@ -230,12 +325,16 @@
     defaultFilter: defaultFilter,
     matches: matches,
     markerKind: markerKind,
+    isDerived: isDerived,
     toGeoJSON: toGeoJSON,
     countMatching: countMatching,
     record: record,
     osmUrl: osmUrl,
     inBounds: inBounds,
+    searchNames: searchNames,
+    placeText: placeText,
     PREF_NAMES: PREF_NAMES,
+    PLACE_KINDS: PLACE_KINDS,
     LABEL: LABEL
   };
 })(window);

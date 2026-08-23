@@ -44,6 +44,7 @@
     'close-list': 'close',
     'directions-icon': 'directions',
     'empty-state-icon': 'empty',
+    'attribute-place-icon': 'place',
     'attribute-multi-icon': 'accessible',
     'attribute-style-icon': 'seated',
     'attribute-gender-icon': 'male',
@@ -65,6 +66,10 @@
       var el = $('legend-marker-' + k);
       if (el) el.innerHTML = window.TMIcons.marker(k, false);
     });
+    var fac = $('legend-marker-facility');
+    if (fac && window.TMIcons.facilityMarker) {
+      fac.innerHTML = window.TMIcons.facilityMarker('unknown', false);
+    }
   }
 
   // ------------------------------------------------- CSS 変数から色を読み出す
@@ -101,8 +106,10 @@
     });
   }
 
-  function markerSvg(kind, selected, color) {
-    var svg = window.TMIcons.marker(kind, selected);
+  function markerSvg(kind, selected, color, facility) {
+    var svg = facility && window.TMIcons.facilityMarker
+      ? window.TMIcons.facilityMarker(kind, selected)
+      : window.TMIcons.marker(kind, selected);
     // currentColor を実際の色に置き換え、ラスタライズできるよう寸法を明示する
     svg = svg.replace(/currentColor/g, color);
     svg = svg.replace('<svg ', '<svg width="' + (MARKER_W * MARKER_PR) + '" height="' + (MARKER_H * MARKER_PR) + '" ');
@@ -114,14 +121,17 @@
     var jobs = [];
     ['yes', 'no', 'unknown'].forEach(function (kind) {
       [false, true].forEach(function (sel) {
-        var id = 'marker-' + kind + (sel ? '-selected' : '');
-        jobs.push(
-          svgToImageData(markerSvg(kind, sel, colors[kind]), MARKER_W, MARKER_H, MARKER_PR)
-            .then(function (data) {
-              if (map.hasImage(id)) map.removeImage(id);
-              map.addImage(id, data, { pixelRatio: MARKER_PR });
-            })
-        );
+        [false, true].forEach(function (facility) {
+          var id = (facility ? 'facility-' : 'marker-') + kind + (sel ? '-selected' : '');
+          jobs.push(
+            svgToImageData(markerSvg(kind, sel, colors[kind], facility),
+                           MARKER_W, MARKER_H, MARKER_PR)
+              .then(function (data) {
+                if (map.hasImage(id)) map.removeImage(id);
+                map.addImage(id, data, { pixelRatio: MARKER_PR });
+              })
+          );
+        });
       });
     });
     return Promise.all(jobs);
@@ -204,7 +214,9 @@
       source: 'toilets',
       filter: ['!', ['has', 'point_count']],
       layout: {
-        'icon-image': ['concat', 'marker-', ['get', 'k']],
+        'icon-image': ['concat',
+          ['case', ['==', ['get', 'd'], 1], 'facility-', 'marker-'],
+          ['get', 'k']],
         'icon-size': 1,
         'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
@@ -219,7 +231,9 @@
       type: 'symbol',
       source: 'selected',
       layout: {
-        'icon-image': ['concat', 'marker-', ['get', 'k'], '-selected'],
+        'icon-image': ['concat',
+          ['case', ['==', ['get', 'd'], 1], 'facility-', 'marker-'],
+          ['get', 'k'], '-selected'],
         'icon-size': 1.25,
         'icon-anchor': 'bottom',
         'icon-allow-overlap': true,
@@ -300,11 +314,16 @@
     var go = function () {
       var r = window.TMData.record(i);
 
-      $('place-name').textContent = r.name || '名前の情報はありません';
+      $('place-name').textContent = r.name || r.place || '名前の情報はありません';
       var sub = [];
+      if (!r.name && r.place && r.placeKindLabel) sub.push(r.placeKindLabel);
       if (r.pref) sub.push(r.pref);
       if (userPosition) sub.push('現在地から' + fmtDistance(haversine(userPosition, [r.lon, r.lat])));
       $('place-address').textContent = sub.join(' ・ ');
+
+      setAttr('attribute-place-value', r.placeText || '不明', !r.placeText);
+      var dnote = $('detail-derived-note');
+      if (dnote) dnote.hidden = !r.derived;
 
       setAttr('attribute-multi-value', r.text.multi, r.code.multi === 0);
       setAttr('attribute-style-value', r.text.style, r.code.style === 0);
@@ -321,6 +340,7 @@
       Object.keys(r.code).forEach(function (k) { if (r.code[k] === 0) unknownCount++; });
       if (!r.hours) unknownCount++;
       if (!r.operator) unknownCount++;
+      if (!r.placeText) unknownCount++;
       var note = $('detail-unknown-note');
       if (note) note.hidden = unknownCount === 0;
 
@@ -335,7 +355,10 @@
         features: [{
           type: 'Feature',
           geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
-          properties: { k: window.TMData.markerKind(window.TMData.store.flags[i]) }
+          properties: {
+            k: window.TMData.markerKind(window.TMData.store.flags[i]),
+            d: window.TMData.isDerived(window.TMData.store.flags[i]) ? 1 : 0
+          }
         }]
       });
 
@@ -380,8 +403,11 @@
   var LIST_LIMIT = 50;
   var listSort = 'distance';
 
-  function tagsFor(code) {
+  function tagsFor(r) {
     var out = [];
+    if (r.inside && r.placeKindTag) out.push(['place-' + r.placeKindKey, r.placeKindTag]);
+    if (r.derived) out.push(['derived', '施設内（場所不明）']);
+    var code = r.code;
     if (code.multi === 1) out.push(['multi', '車いす対応']);
     if (code.style === 1) out.push(['style', '洋式']);
     else if (code.style === 2) out.push(['style', '和式']);
@@ -408,8 +434,8 @@
     if (listSort === 'name') {
       var det = window.TMData.store.details;
       items.sort(function (a, b) {
-        var na = det && det[a.i] && det[a.i][0] ? 0 : 1;
-        var nb = det && det[b.i] && det[b.i][0] ? 0 : 1;
+        var na = det && det[a.i] && (det[a.i][0] || det[a.i][4]) ? 0 : 1;
+        var nb = det && det[b.i] && (det[b.i][0] || det[b.i][4]) ? 0 : 1;
         return na !== nb ? na - nb : a.d - b.d;
       });
       shown = items.slice(0, LIST_LIMIT);
@@ -452,14 +478,38 @@
       var kind = window.TMData.markerKind(window.TMData.store.flags[it.i]);
       var markerEl = node.querySelector('.list-item__marker');
       markerEl.classList.add('list-item__marker--' + kind);
-      markerEl.innerHTML = window.TMIcons.marker(kind, false);
-      node.querySelector('.list-item__name').textContent = r.name || '名前の情報はありません';
+      markerEl.innerHTML = (r.derived && window.TMIcons.facilityMarker)
+        ? window.TMIcons.facilityMarker(kind, false)
+        : window.TMIcons.marker(kind, false);
+
+      // 名前と場所の使い分け（web/design/ui-place.html のデザイン指定に従う）
+      var nameEl = node.querySelector('.list-item__name');
+      var placeEl = node.querySelector('.list-item__place');
+      if (r.name) {
+        nameEl.textContent = r.name;
+        if (r.placeText) { placeEl.textContent = r.placeText; placeEl.hidden = false; }
+        else { placeEl.textContent = ''; placeEl.hidden = true; }
+      } else if (r.place) {
+        nameEl.textContent = r.place;
+        if (r.inside) {
+          placeEl.textContent = r.placeKindLabel || 'この施設の中';
+        } else {
+          placeEl.textContent = (r.placeKindName || 'この施設') + 'のそば' +
+            (r.placeDistance ? '（約' + r.placeDistance + 'm）' : '');
+        }
+        placeEl.hidden = false;
+      } else {
+        nameEl.textContent = '名前の情報はありません';
+        placeEl.textContent = '';
+        placeEl.hidden = true;
+      }
+
       node.querySelector('.list-item__meta').textContent =
         '地図の中心から ' + fmtDistance(it.d) + (r.pref ? ' ・ ' + r.pref : '');
 
       var tagBox = node.querySelector('.list-item__tags');
       tagBox.innerHTML = '';
-      tagsFor(r.code).forEach(function (t) {
+      tagsFor(r).forEach(function (t) {
         var span = document.createElement('span');
         span.className = 'tag tag--' + t[0];
         span.textContent = t[1];
@@ -517,9 +567,8 @@
     var tpl = $('coverage-row-template');
     if (!list || !tpl) return;
     list.innerHTML = '';
-    COVERAGE_LABELS.forEach(function (pair) {
-      var key = pair[0], label = pair[1];
-      var n = (meta.known && meta.known[key]) || 0;
+
+    function row(label, n) {
       var pct = total ? (n * 100 / total) : 0;
       var node = tpl.content.cloneNode(true);
       node.querySelector('.coverage-row__label').textContent = label;
@@ -527,6 +576,13 @@
         pct.toFixed(1) + '%（' + n.toLocaleString('ja-JP') + '件）';
       node.querySelector('.coverage-row__fill').style.width = pct.toFixed(1) + '%';
       list.appendChild(node);
+    }
+
+    if (meta.place && meta.place.with_place != null) {
+      row('どこにあるか（駅・施設・公園など）', meta.place.with_place);
+    }
+    COVERAGE_LABELS.forEach(function (pair) {
+      row(pair[1], (meta.known && meta.known[pair[0]]) || 0);
     });
   }
 
@@ -580,8 +636,18 @@
       btn.addEventListener('click', function () {
         ul.hidden = true;
         $('place-search').setAttribute('aria-expanded', 'false');
-        map.flyTo({ center: it.center, zoom: it.zoom || 16, duration: 900 });
-        if (it.index != null) showDetail(it.index);
+        if (it.indexes && it.indexes.length > 1) {
+          // 同じ施設に複数あるときは、その施設全体が見える位置へ寄せて一覧を開く
+          var lats = it.indexes.map(function (i) { return window.TMData.store.lat[i]; });
+          var lons = it.indexes.map(function (i) { return window.TMData.store.lon[i]; });
+          var b = [[Math.min.apply(null, lons), Math.min.apply(null, lats)],
+                   [Math.max.apply(null, lons), Math.max.apply(null, lats)]];
+          map.fitBounds(b, { padding: 120, maxZoom: 18, duration: 900 });
+          map.once('moveend', function () { openPanel('list-panel'); });
+        } else {
+          map.flyTo({ center: it.center, zoom: it.zoom || 16, duration: 900 });
+          if (it.index != null) showDetail(it.index);
+        }
       });
       li.appendChild(btn);
       ul.appendChild(li);
@@ -591,34 +657,44 @@
   }
 
   function searchLocalNames(q, limit) {
-    var out = [];
-    var d = window.TMData.store.details;
-    if (!d) return out;
-    var lower = q.toLowerCase();
-    for (var i = 0; i < d.length && out.length < limit; i++) {
-      var nm = d[i][0];
-      if (nm && nm.toLowerCase().indexOf(lower) !== -1) {
-        out.push({
-          kind: 'toilet',
-          title: nm,
-          sub: window.TMData.PREF_NAMES[(window.TMData.store.flags[i] >> 20) & 63] || '',
-          center: [window.TMData.store.lon[i], window.TMData.store.lat[i]],
-          zoom: 17,
-          index: i
-        });
+    return window.TMData.searchNames(q, limit).map(function (g) {
+      var r = window.TMData.record(g.indexes[0]);
+      var parts = [];
+      if (g.count > 1) {
+        parts.push('トイレ ' + g.count + ' か所');
+        if (r.placeKindName) parts.push(r.placeKindName);
+      } else if (g.kind === 'toilet' && r.placeText) {
+        parts.push(r.placeText);
+      } else if (r.placeKindLabel) {
+        parts.push(r.placeKindLabel);
       }
-    }
-    return out;
+      if (r.pref) parts.push(r.pref);
+      return {
+        kind: 'toilet',
+        title: g.label,
+        sub: parts.join(' ・ '),
+        center: [r.lon, r.lat],
+        zoom: 17,
+        indexes: g.indexes,
+        index: g.count === 1 ? g.indexes[0] : null
+      };
+    });
   }
 
   function doSearch(q) {
     if (!q || q.trim().length < 1) { renderResults([]); return; }
-    var local = searchLocalNames(q.trim(), 4);
+    if (!window.TMData.store.details) {
+      // 詳細がまだなら読み終わってからやり直す
+      window.TMData.loadDetails(DATA_DETAILS)
+        .then(function () { if ($('place-search').value === q) doSearch(q); })
+        .catch(function () {});
+    }
+    var local = searchLocalNames(q.trim(), 6);
     fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q=' + encodeURIComponent(q.trim()))
       .then(function (r) { return r.ok ? r.json() : []; })
       .catch(function () { return []; })
       .then(function (arr) {
-        var places = (arr || []).slice(0, 6).map(function (f) {
+        var places = (arr || []).slice(0, 5).map(function (f) {
           return {
             kind: 'place',
             title: f.properties.title,
@@ -665,11 +741,26 @@
     'filter-public': 'anyone'
   };
 
+  // 場所の種類（チェックボックスの id -> 場所コード）
+  var PLACE_FILTER_IDS = {
+    'filter-place-station': 1,
+    'filter-place-shop': 2,
+    'filter-place-park': 3,
+    'filter-place-roadside': 4,
+    'filter-place-public': 5
+  };
+
   function readFilters() {
     Object.keys(FILTER_IDS).forEach(function (id) {
       var el = $(id);
       if (el) filter[FILTER_IDS[id]] = el.checked;
     });
+    var places = [];
+    Object.keys(PLACE_FILTER_IDS).forEach(function (id) {
+      var el = $(id);
+      if (el && el.checked) places.push(PLACE_FILTER_IDS[id]);
+    });
+    filter.places = places;
   }
 
   function bindUI() {
@@ -707,13 +798,15 @@
     $('close-info').addEventListener('click', function () { closePanel('info-panel'); });
     $('close-detail').addEventListener('click', function () { closePanel('detail-panel'); });
 
-    Object.keys(FILTER_IDS).forEach(function (id) {
+    Object.keys(FILTER_IDS).concat(Object.keys(PLACE_FILTER_IDS)).forEach(function (id) {
       var el = $(id);
       if (el) el.addEventListener('change', function () { readFilters(); refresh(); });
     });
 
     $('clear-filters').addEventListener('click', function () {
-      Object.keys(FILTER_IDS).forEach(function (id) { if ($(id)) $(id).checked = false; });
+      Object.keys(FILTER_IDS).concat(Object.keys(PLACE_FILTER_IDS)).forEach(function (id) {
+        if ($(id)) $(id).checked = false;
+      });
       readFilters();
       refresh();
     });
@@ -724,6 +817,10 @@
     });
 
     var input = $('place-search');
+    input.addEventListener('focus', function () {
+      // 施設名で探せるようにするため、詳細データを先に読み込んでおく
+      window.TMData.loadDetails(DATA_DETAILS).catch(function () {});
+    });
     input.addEventListener('input', function () {
       $('clear-search').hidden = !input.value;
       clearTimeout(searchTimer);

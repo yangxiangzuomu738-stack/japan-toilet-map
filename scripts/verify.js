@@ -65,13 +65,21 @@ async function waitForApp(page, ms = 60000) {
         filterDisplay: getComputedStyle(document.getElementById('filter-panel')).display,
         images: ['marker-yes', 'marker-no', 'marker-unknown',
                  'marker-yes-selected', 'marker-no-selected', 'marker-unknown-selected']
-                 .filter(id => m.hasImage(id))
+                 .filter(id => m.hasImage(id)),
+        facilityImages: ['facility-yes', 'facility-no', 'facility-unknown',
+                 'facility-yes-selected', 'facility-no-selected', 'facility-unknown-selected']
+                 .filter(id => m.hasImage(id)),
+        legendFacility: (document.getElementById('legend-marker-facility') || {}).innerHTML || ''
       };
     });
     check('地図の入れ物に大きさがある', state.mapH > 300, state.mapW + 'x' + state.mapH);
     check('スタイルが読み込まれた', state.styleLoaded, state.layers + ' レイヤ');
     check('トイレのデータ源が登録された', state.hasToilets);
     check('マーカー画像が6種類そろっている', state.images.length === 6, state.images.join(','));
+    check('施設マーカー画像が6種類そろっている', state.facilityImages.length === 6,
+          state.facilityImages.length + ' 種類');
+    check('凡例に施設マーカーが出る', /<svg/.test(state.legendFacility),
+          state.legendFacility.slice(0, 40));
     check('データ件数', state.count > 30000, state.count + ' 件');
     check('詳細パネルは初期状態で非表示', state.detailDisplay === 'none',
           'hidden=' + state.detailHidden + ' display=' + state.detailDisplay);
@@ -154,6 +162,103 @@ async function waitForApp(page, ms = 60000) {
           filtered.before + ' → ' + filtered.after);
     await page.screenshot({ path: path.join(SHOTS, '04-desktop-filter.png') });
 
+    // ---- 場所（駅・商業施設など）----
+    const placeInfo = await page.evaluate(async () => {
+      await window.TMData.loadDetails('data/details.json');
+      const st = window.TMData.store;
+      let withPlace = 0, inside = 0, derived = 0, kinds = {};
+      let sample = null, sampleDerived = null;
+      for (let i = 0; i < st.count; i++) {
+        const r = window.TMData.record(i);
+        if (r.place) {
+          withPlace++;
+          if (r.inside) inside++;
+          kinds[r.placeKind] = (kinds[r.placeKind] || 0) + 1;
+          if (!sample && r.inside && r.placeKind === 1) sample = { i, place: r.place, text: r.placeText };
+        }
+        if (r.derived) {
+          derived++;
+          if (!sampleDerived) sampleDerived = { i, place: r.place };
+        }
+      }
+      return { total: st.count, withPlace, inside, derived, kinds, sample, sampleDerived };
+    });
+    check('場所が分かるトイレがある', placeInfo.withPlace > 0,
+          placeInfo.withPlace + ' / ' + placeInfo.total + ' 件');
+    check('駅の中のトイレがある', (placeInfo.kinds[1] || 0) > 0,
+          (placeInfo.kinds[1] || 0) + ' 件');
+    check('商業施設の中のトイレがある', (placeInfo.kinds[2] || 0) > 0,
+          (placeInfo.kinds[2] || 0) + ' 件');
+    check('施設に「トイレあり」だけの記録がある', placeInfo.derived > 0,
+          placeInfo.derived + ' 件');
+
+    if (placeInfo.sample) {
+      const placeDetail = await page.evaluate(async (i) => {
+        window.TMApp.showDetail(i);
+        await new Promise(r => setTimeout(r, 1200));
+        return {
+          value: document.getElementById('attribute-place-value').textContent,
+          name: document.getElementById('place-name').textContent
+        };
+      }, placeInfo.sample.i);
+      check('詳細に「場所」が出る', /の中|のそば/.test(placeDetail.value), placeDetail.value);
+      check('名前が無くても場所名が見出しになる', placeDetail.name.length > 0, placeDetail.name);
+    }
+
+    if (placeInfo.sampleDerived) {
+      const derivedDetail = await page.evaluate(async (i) => {
+        window.TMApp.showDetail(i);
+        await new Promise(r => setTimeout(r, 1200));
+        const n = document.getElementById('detail-derived-note');
+        const shown = !n.hidden;
+        document.getElementById('close-detail').click();
+        return { shown, text: n.textContent.slice(0, 24) };
+      }, placeInfo.sampleDerived.i);
+      check('施設のみの記録に注意書きが出る', derivedDetail.shown, derivedDetail.text);
+    }
+
+    // 場所の種類での絞り込み
+    const placeFilter = await page.evaluate(async () => {
+      document.getElementById('open-filter').click();
+      await new Promise(r => setTimeout(r, 300));
+      // 前の検証で残った条件を消してから測る
+      document.getElementById('clear-filters').click();
+      await new Promise(r => setTimeout(r, 1200));
+      const before = window.TMApp.getMap().getSource('toilets')._data.features.length;
+      document.getElementById('filter-place-station').click();
+      await new Promise(r => setTimeout(r, 1500));
+      const after = window.TMApp.getMap().getSource('toilets')._data.features.length;
+      document.getElementById('clear-filters').click();
+      await new Promise(r => setTimeout(r, 1200));
+      const back = window.TMApp.getMap().getSource('toilets')._data.features.length;
+      document.getElementById('close-filter').click();
+      return { before, after, back };
+    });
+    check('「駅・駅ビルの中」で絞り込める',
+          placeFilter.after > 0 && placeFilter.after < placeFilter.before,
+          placeFilter.before + ' → ' + placeFilter.after);
+    check('条件を消すと元に戻る', placeFilter.back === placeFilter.before,
+          String(placeFilter.back));
+
+    // 施設名での検索
+    if (placeInfo.sample) {
+      const facSearch = await page.evaluate(async (word) => {
+        const input = document.getElementById('place-search');
+        input.value = word;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise(r => setTimeout(r, 2500));
+        const items = document.querySelectorAll('#search-results .search-result');
+        const titles = Array.prototype.map.call(items, el =>
+          el.querySelector('.search-result__title').textContent);
+        input.value = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return { n: items.length, titles: titles.slice(0, 4) };
+      }, placeInfo.sample.place);
+      check('施設名でトイレが検索できる',
+            facSearch.titles.some(t => t.indexOf(placeInfo.sample.place) !== -1),
+            placeInfo.sample.place + ' -> ' + JSON.stringify(facSearch.titles));
+    }
+
     // ---- 一覧パネル ----
     const listInfo = await page.evaluate(async () => {
       document.getElementById('close-filter').click();
@@ -225,7 +330,8 @@ async function waitForApp(page, ms = 60000) {
       };
     });
     check('「データについて」が開く', info.display !== 'none', info.display);
-    check('記録状況が10項目ぶん出る', info.rows === 10, info.rows + ' 行 / 例: ' + info.sample);
+    check('記録状況が11項目ぶん出る（場所＋10項目）', info.rows === 11,
+          info.rows + ' 行 / 例: ' + info.sample);
     check('掲載件数が表示される', /\d/.test(info.total), info.total);
     check('取得日が表示される', /年/.test(info.updated), info.updated);
     check('割合のバーに幅が入る', /%$/.test(info.barWidth), info.barWidth);

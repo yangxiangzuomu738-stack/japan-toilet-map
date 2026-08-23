@@ -12,3 +12,12 @@ data/verify-result.json
 .DS_Store
 __pycache__/
 *.pyc
+data/places/
+data/place_geom/
+data/place_assign.json
+data/facility_toilets.json
+data/national.json
+data/t_noaround.json
+data/probe_*.json
+data/assign.log
+data/fetch_places.log
