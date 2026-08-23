@@ -21,3 +21,5 @@ data/t_noaround.json
 data/probe_*.json
 data/assign.log
 data/fetch_places.log
+data/audit_derived.log
+data/aeon*.json
