@@ -1,68 +1,68 @@
 {
-  "generated": "2026-08-23T23:07:34+00:00",
-  "count": 34936,
-  "count_real": 31704,
-  "count_derived": 3232,
+  "generated": "2026-10-02T03:04:20+00:00",
+  "count": 35375,
+  "count_real": 32048,
+  "count_derived": 3327,
   "source": "OpenStreetMap contributors (ODbL) / Overpass API",
   "excluded_private": 156,
   "missing_coordinates": 0,
-  "facility_duplicates_skipped": 1422,
-  "facility_not_public_skipped": 432,
+  "facility_duplicates_skipped": 1599,
+  "facility_not_public_skipped": 440,
   "known": {
-    "multi": 8449,
-    "style": 918,
-    "male": 2311,
-    "female": 2334,
-    "unisex": 2202,
-    "baby": 1853,
-    "ostomate": 79,
-    "fee": 5310,
-    "access": 5659,
-    "h24": 2116
+    "multi": 8643,
+    "style": 1015,
+    "male": 2336,
+    "female": 2359,
+    "unisex": 2217,
+    "baby": 1890,
+    "ostomate": 78,
+    "fee": 5466,
+    "access": 5811,
+    "h24": 2233
   },
   "place": {
-    "with_place": 24885,
-    "inside": 18010,
-    "near": 6875,
+    "with_place": 25225,
+    "inside": 18208,
+    "near": 7017,
     "kinds": {
       "1": {
         "name": "駅・駅ビル",
-        "count": 3031
+        "count": 3101
       },
       "2": {
         "name": "商業施設",
-        "count": 2099
+        "count": 2159
       },
       "3": {
         "name": "公園",
-        "count": 15390
+        "count": 15510
       },
       "4": {
         "name": "道の駅・SA/PA",
-        "count": 1511
+        "count": 1524
       },
       "5": {
         "name": "公共施設",
-        "count": 1189
+        "count": 1217
       }
     }
   },
   "prefectures": {
     "1": {
       "name": "北海道",
-      "count": 1915
+      "count": 1916
     },
     "2": {
       "name": "青森県",
-      "count": 323
+      "count": 340
     },
     "3": {
       "name": "岩手県",
-      "count": 280
+      "count": 282
     },
     "4": {
       "name": "宮城県",
-      "count": 707
+      "count": 716
     },
     "5": {
       "name": "秋田県",
@@ -70,43 +70,43 @@
     },
     "6": {
       "name": "山形県",
-      "count": 281
+      "count": 284
     },
     "7": {
       "name": "福島県",
-      "count": 620
+      "count": 624
     },
     "8": {
       "name": "茨城県",
-      "count": 417
+      "count": 423
     },
     "9": {
       "name": "栃木県",
-      "count": 483
+      "count": 484
     },
     "10": {
       "name": "群馬県",
-      "count": 591
+      "count": 594
     },
     "11": {
       "name": "埼玉県",
-      "count": 1359
+      "count": 1429
     },
     "12": {
       "name": "千葉県",
-      "count": 1150
+      "count": 1152
     },
     "13": {
       "name": "東京都",
-      "count": 5046
+      "count": 5105
     },
     "14": {
       "name": "神奈川県",
-      "count": 2151
+      "count": 2164
     },
     "15": {
       "name": "新潟県",
-      "count": 472
+      "count": 473
     },
     "16": {
       "name": "富山県",
@@ -114,71 +114,71 @@
     },
     "17": {
       "name": "石川県",
-      "count": 233
+      "count": 238
     },
     "18": {
       "name": "福井県",
-      "count": 244
+      "count": 252
     },
     "19": {
       "name": "山梨県",
-      "count": 393
+      "count": 417
     },
     "20": {
       "name": "長野県",
-      "count": 1166
+      "count": 1177
     },
     "21": {
       "name": "岐阜県",
-      "count": 447
+      "count": 451
     },
     "22": {
       "name": "静岡県",
-      "count": 1389
+      "count": 1392
     },
     "23": {
       "name": "愛知県",
-      "count": 1730
+      "count": 1799
     },
     "24": {
       "name": "三重県",
-      "count": 426
+      "count": 425
     },
     "25": {
       "name": "滋賀県",
-      "count": 524
+      "count": 529
     },
     "26": {
       "name": "京都府",
-      "count": 1071
+      "count": 1083
     },
     "27": {
       "name": "大阪府",
-      "count": 1706
+      "count": 1725
     },
     "28": {
       "name": "兵庫県",
-      "count": 1547
+      "count": 1548
     },
     "29": {
       "name": "奈良県",
-      "count": 462
+      "count": 468
     },
     "30": {
       "name": "和歌山県",
-      "count": 374
+      "count": 376
+    },
+    "31": {
+      "name": "鳥取県",
+      "count": 242
     },
     "32": {
       "name": "島根県",
-      "count": 298
-    },
-    "33": {
-      "name": "岡山県",
-      "count": 658
+      "count": 264
     },
     "34": {
       "name": "広島県",
-      "count": 503
+      "count": 614
     },
     "35": {
       "name": "山口県",
@@ -186,23 +186,23 @@
     },
     "36": {
       "name": "徳島県",
-      "count": 195
+      "count": 207
     },
     "37": {
       "name": "香川県",
-      "count": 328
+      "count": 683
     },
     "38": {
       "name": "愛媛県",
-      "count": 387
+      "count": 389
     },
     "39": {
       "name": "高知県",
-      "count": 401
+      "count": 402
     },
     "40": {
       "name": "福岡県",
-      "count": 768
+      "count": 777
     },
     "41": {
       "name": "佐賀県",
@@ -214,23 +214,23 @@
     },
     "43": {
       "name": "熊本県",
-      "count": 331
+      "count": 333
     },
     "44": {
       "name": "大分県",
-      "count": 458
+      "count": 459
     },
     "45": {
       "name": "宮崎県",
-      "count": 349
+      "count": 350
     },
     "46": {
       "name": "鹿児島県",
-      "count": 624
+      "count": 635
     },
     "47": {
       "name": "沖縄県",
-      "count": 639
+      "count": 661
     }
   }
 }
